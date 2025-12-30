@@ -1,0 +1,564 @@
+pip install pandas numpy
+
+# Get Pipeline Parameters using command-line arguments
+STORAGE_ACCOUNT = "stcta0001devetxt"
+OE_ID = "0"
+FOLDER_NAME = "01082025"
+VERSION = "cim_asp"
+
+import os
+import re
+import pandas as pd
+import numpy as np
+import pyarrow.parquet as pq
+import fsspec
+import glob
+from datetime import datetime
+
+# Define paths
+INPUT_PATH = f"abfss://sac-core-f0001@{STORAGE_ACCOUNT}.dfs.core.windows.net/oe_ingestion/data_files/{OE_ID}/tmp"
+OUTPUT_PATH = f"abfss://sac-core-f0001@{STORAGE_ACCOUNT}.dfs.core.windows.net/oe_ingestion/cimtoaspire_output/{OE_ID}/{VERSION}/{FOLDER_NAME}"
+CONFIG_PATH = f"abfss://sac-core-f0001@{STORAGE_ACCOUNT}.dfs.core.windows.net/oe_ingestion/mapping/{VERSION}/cim_aspire_config/Config_Table.csv"
+ASPIRE_MAPPING_PATH = f"abfss://sac-core-f0001@{STORAGE_ACCOUNT}.dfs.core.windows.net/oe_ingestion/mapping/{VERSION}/cim_aspire_portfolio_file_mapping"
+ERROR_LOG_PATH = f"abfss://sac-core-f0001@{STORAGE_ACCOUNT}.dfs.core.windows.net/oe_ingestion/errorlogs/{OE_ID}/{VERSION}/{FOLDER_NAME}"
+CIM_ASPIRE_VALUE = f"abfss://sac-core-f0001@{STORAGE_ACCOUNT}.dfs.core.windows.net/oe_ingestion/mapping/{VERSION}/cim_aspire_value"
+
+# Create a filesystem object using fsspec
+fs = fsspec.filesystem("abfss", account_name=STORAGE_ACCOUNT, container="sac-core-f0001")
+
+config_df = pd.read_csv(CONFIG_PATH)
+
+def inspect_parquet_schema(file_path):
+    """Inspect the schema of a Parquet file."""
+    try:
+        with fs.open(file_path) as f:
+            parquet_file = pq.ParquetFile(f)
+            return parquet_file.schema.names
+    except Exception as e:
+        print(f"Error reading {file_path}: {e}")
+        return []
+
+def load_files(pattern="*", columns=None, base_path=INPUT_PATH):
+    """Load Parquet files from the specified base path matching the pattern and columns."""
+    import posixpath
+
+    # Construct the full path using the base_path and pattern
+    full_path = posixpath.join(base_path.rstrip("/"), pattern + ".parquet")
+
+    try:
+        file_list = fs.glob(full_path)
+    except Exception as e:
+        print(f"Error accessing path: {e}")
+        return {}
+
+    if not file_list:
+        print(f"No files found for pattern: {pattern}")
+        return {}
+
+    print("Using path:", base_path)
+    print("Using pattern:", pattern + ".parquet")
+    print("Found Parquet files:", file_list)
+
+    df_dict = {}
+    for file in file_list:
+        available_columns = inspect_parquet_schema(file)
+        if columns:
+            columns_to_load = [col for col in columns if col in available_columns]
+        else:
+            columns_to_load = None
+
+        try:
+            df = pd.read_parquet(fs.open(file, "rb"), columns=columns_to_load)
+            df_dict[posixpath.basename(file)] = df
+        except Exception as e:
+            print(f"Error loading {file}: {e}")
+
+    return df_dict
+
+# Example usage
+#loaded_files = load_files(pattern="*", columns=["column1", "column2"])
+
+def normalize_key_columns(df, key_cols):
+    """Ensure key columns are string-clean and normalized before join or refcheck."""
+    for col in key_cols:
+        if col in df.columns:
+            df[col] = (
+                df[col]
+                .astype(str)
+                .str.strip()                          # remove extra spaces
+                .replace(["NAN", "NONE", "NULL"], "") # remove fake nulls
+                .replace({np.nan: ""})                # true NaN handling
+            )
+    return df
+
+def generate_composite_key(df, key_columns, sep="|"):
+    
+    import pandas as pd
+
+    # Ensure list-like
+    if isinstance(key_columns, str):
+        key_columns = [key_columns]
+
+    # Normal vectorised concat
+    tmp = df[key_columns].astype(str)
+    tmp = tmp.fillna("")
+    result = tmp.agg(sep.join, axis=1)
+
+    # Defensive: if for some weird reason this is a DataFrame, flatten it
+    if isinstance(result, pd.DataFrame):
+        
+        result = result.iloc[:, 0]
+
+    # Ensure result is a Series aligned to df index
+    if not isinstance(result, pd.Series):
+        result = pd.Series(result, index=df.index)
+
+    return result
+
+def refcheck_in_chunks(left_file, key_cols, valid_keys, fs, chunk_size=2_000_000):
+    """Memory-safe reference check for huge datasets (>10 M rows)."""
+    valid_keys = set(valid_keys)
+    chunks = []
+
+    with fs.open(left_file, "rb") as f:
+        df = pd.read_parquet(f)
+
+    # Keep normalization consistent
+    df = normalize_key_columns(df, key_cols)
+
+    total_rows = len(df)
+    print(f"Performing chunk-based ref check: {total_rows:,} rows, chunk size = {chunk_size:,}")
+
+    for start in range(0, total_rows, chunk_size):
+        end = min(start + chunk_size, total_rows)
+        chunk = df.iloc[start:end].copy()
+
+        # ✅ use the safe composite key builder here
+        chunk["_composite_key"] = generate_composite_key(chunk, key_cols)
+        chunk = chunk[chunk["_composite_key"].isin(valid_keys)].drop(columns="_composite_key")
+        chunks.append(chunk)
+        print(f" Processed rows {start:,}–{end:,} → kept {len(chunk):,}")
+
+    return pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
+
+
+MAX_GROUP_VALUES = 4
+
+def transform_group(df):
+
+    if df.empty:
+        return pd.DataFrame([{}])
+    
+    result = {}
+    
+    group_cols = [c for c in right_columns if c not in right_key_col]
+    
+    for col in group_cols:
+        if col not in df.columns:
+            continue
+        vals = df[col].tolist()    
+        vals = (vals + [None] * MAX_GROUP_VALUES)[:MAX_GROUP_VALUES]
+        
+        for i, v in enumerate(vals, 1):
+            result[f"{col}{i}"] = v
+
+    return pd.DataFrame([result])
+
+def renaming_columns(df_dict, column_config):
+    rename_mapping = {}
+    if column_config:
+        for m in column_config.split(";"):
+            if ":" in m:
+                src, tgt = m.split(":")
+                rename_mapping[src.strip()] = tgt.strip()
+    for fn, df in df_dict.items():
+        df.rename(columns=rename_mapping, inplace=True)
+        df_dict[fn] = df
+    return df_dict
+
+# === Main ===
+error_records = []
+join_log_records = []
+
+for output_table in config_df["Output"].dropna().unique():
+    print(f"\n Processing Table: {output_table}")
+    table_config = config_df[config_df["Output"] == output_table]
+
+    # Enhancement 1: Direct flag (Y = do reference check, SKIP joins; N = normal flow)
+    direct_flag = table_config["Direct"].dropna().unique()[0] if "Direct" in table_config.columns else "N"
+
+    # --- Load left files (Enhancement 3 path switch) ---
+    left_pattern = table_config["CIM Left Table"].dropna().unique()[0]
+    base_path = CIM_ASPIRE_VALUE if left_pattern.startswith("CIM_") else INPUT_PATH
+
+    # Determine columns to read + any rename mapping from left column config
+    if "CIM Left Table Columns" in table_config.columns and not table_config["CIM Left Table Columns"].dropna().empty:
+        left_column_config = str(table_config["CIM Left Table Columns"].dropna().unique()[0])
+        mappings = left_column_config.split(";")
+        left_columns, _rename_map = [], {}
+        for m in mappings:
+            if ":" in m:
+                src, tgt = m.split(":")
+                left_columns.append(src.strip())
+                _rename_map[src.strip()] = tgt.strip()
+            else:
+                left_columns.append(m.strip())
+        first_key = str(table_config["CIM Left Table Key"].dropna().iloc[0])
+        left_columns.extend(k for k in first_key.split(";") if k not in left_columns)
+    else:
+        left_column_config = None
+        left_columns = None
+
+    left_files = load_files(left_pattern, columns=left_columns, base_path=base_path)
+    left_files = renaming_columns(left_files, left_column_config)
+    if not left_files:
+        print(f" No data found for {left_pattern}, skipping...")
+        left_key_cols = table_config["CIM Left Table Key"].dropna().iloc[0].split(";")
+        empty_columns = []
+        if left_columns:
+            empty_columns.extend(left_columns)
+        for k in left_key_cols:
+            if k not in empty_columns:
+                empty_columns.append(k)
+        final_df = pd.DataFrame(columns=empty_columns)
+
+    else:
+        left_key_cols = table_config["CIM Left Table Key"].dropna().iloc[0].split(";")
+        ref_check_flag = table_config["Reference Check"].dropna().unique()[0] if "Reference Check" in table_config.columns else "N"
+
+    if ref_check_flag == "Y":
+        ref_pattern = table_config["Reference Table"].dropna().unique()[0]
+        ref_key_col = table_config["Reference_Columns"].dropna().iloc[0].split(";")
+        ref_files = load_files(ref_pattern, columns=ref_key_col)  # ref files assumed in INPUT_PATH
+        if not ref_files:
+            print(f" Reference table {ref_pattern} not found, skipping reference check.")
+    
+        else:
+            # Combine all reference files
+            all_ref = pd.concat(ref_files.values(), ignore_index=True)
+    
+            # Normalize and clean key columns (critical fix!)
+            all_ref = normalize_key_columns(all_ref, ref_key_col)
+    
+            # Generate reference composite keys
+            all_ref["_composite_key"] = generate_composite_key(all_ref, ref_key_col)
+            valid_keys = set(all_ref["_composite_key"].unique())
+        
+            # === Left Table Processing ===
+            for src_file, ldf in left_files.items():
+                left_size = len(ldf)
+    
+                # Normalize left keys before generating composite key
+                ldf = normalize_key_columns(ldf, left_key_cols)
+    
+                if left_size > 2_000_000:
+                    print(f" Using chunk-based reference check for {src_file} ({left_size:,} rows)")
+                    temp_left_path = os.path.join(ERROR_LOG_PATH, f"temp_{os.path.basename(src_file)}.parquet")
+                    
+                    with fs.open(temp_left_path, "wb") as f:
+                        ldf.to_parquet(f, index=False)
+                        
+                    # Perform chunk-based reference check (which also normalizes)
+                    filtered_df = refcheck_in_chunks(temp_left_path, left_key_cols, valid_keys, fs)
+                    fs.rm(temp_left_path)
+                    #os.remove(temp_left_path)
+    
+                    # Detect unmatched keys for logging
+                    ldf["_composite_key"] = generate_composite_key(ldf, left_key_cols)
+                    
+                    unmatched_keys = set(ldf["_composite_key"]) - valid_keys
+                else:
+                    # Normal in-memory flow
+                    ldf["_composite_key"] = generate_composite_key(ldf, left_key_cols)
+                    unmatched_keys = set(ldf["_composite_key"]) - valid_keys
+                    filtered_df = ldf[ldf["_composite_key"].isin(valid_keys)].drop(columns=["_composite_key"])
+    
+                # === Log unmatched keys (limited to 50 for safety) ===
+                
+                for key in list(unmatched_keys)[:50]:
+                    row_data = ldf[ldf["_composite_key"] == key].iloc[0]
+                    error_records.append({
+                        "ASPIRE File Name": output_table,
+                        "Key Column": '|'.join(str(row_data[c]) for c in left_key_cols),
+                        "Source File Name": src_file,
+                        "Reference File Name": list(ref_files.keys())[0] if ref_files else "N/A",
+                        "Date": datetime.now().strftime("%m/%d/%Y %H:%M"),
+                        "Error Message": "Reference check failed"
+                    })
+    
+                left_files[src_file] = filtered_df
+
+    # Merge post-refcheck left tables
+    if left_files and any(df is not None and not df.empty for df in left_files.values()):
+        final_df = pd.concat(
+            [df for df in left_files.values() if df is not None],
+            ignore_index=True
+        )
+    else:
+        print(f" All left tables are empty or missing for {output_table}. Proceeding with empty schema...")
+    
+        empty_columns = []
+    
+        if left_columns:
+            empty_columns.extend(left_columns)
+    
+        for k in left_key_cols:
+            if k not in empty_columns:
+                empty_columns.append(k)
+    
+        final_df = pd.DataFrame(columns=empty_columns)
+
+    
+    if final_df.empty:
+        print(f" No matching records left after reference check, skipping {output_table}.")
+        
+
+    initial_left_row_count = len(final_df)
+
+        # --- Skip Join if Direct=Y, but still continue to ASPIRE Mapping ---
+    if direct_flag == "Y":
+        print(f" Direct flag = Y → Skipping joins for {output_table}, proceeding to ASPIRE mapping...")
+
+    # --- Joins (ONLY when Direct != 'Y') ---
+    if direct_flag != "Y":
+        for _, row in table_config[table_config["Reference Check"] == "N"].sort_values(by="Join Priority").iterrows():
+            reference_table = row["Reference Table"]
+            right_pattern = row["CIM Right Table"]
+            join_priority = row.get("Join Priority", None)
+
+            if pd.isna(join_priority) or join_priority == 0 or not right_pattern:
+                print("Skipping Join")
+                if pd.isna(reference_table):
+                    join_log_records.append({
+                        "ASPIRE File Name": output_table,
+                        "Join Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "Left Table": left_pattern,
+                        "Right Table": "N/A",
+                        "Join Type": "Join not performed",
+                        "Left Table Count": initial_left_row_count,
+                        "Right Table Count": "N/A",
+                        "Final Output Count": len(final_df),
+                        "LeftTableKey NotFound in RightTable": "N/A"
+                    })
+                continue
+
+            left_key_col = row["CIM Left Table Key"].split(";")
+            print(["CIM Right Table Key"])
+            right_key_col = row["CIM Right Table Key"].split(";")
+
+            if pd.notna(row["CIM Right Table Columns"]) and row["CIM Right Table Columns"]:
+                right_column_config = str(row["CIM Right Table Columns"])
+                maps = right_column_config.split(";")
+                right_columns, _rnm = [], {}
+                for m in maps:
+                    if ":" in m:
+                        s, t = m.split(":")
+                        right_columns.append(s.strip())
+                        _rnm[s.strip()] = t.strip()
+                    else:
+                        right_columns.append(m.strip())
+                right_columns.extend(k for k in right_key_col if k not in right_columns)
+            else:
+                right_column_config = None
+                right_columns = None
+
+            right_files = load_files(right_pattern, columns=right_columns)  # right tables from INPUT_PATH
+            right_files = renaming_columns(right_files, right_column_config)
+
+            if not right_files:
+                right_df = pd.DataFrame(columns=list(set((right_columns or []) + right_key_col)))
+            else:
+                right_df = pd.concat(right_files.values(), ignore_index=True)
+
+            deduplicate_flag = row.get("Deduplicate Right Table", "N")
+            group_right_table_flag = row.get("Group Right Table", "N")
+
+            if deduplicate_flag == "Y" and group_right_table_flag == "N":
+                # Simple dedup only
+                dedup_cols = list(right_key_col) + (right_columns if right_columns else right_df.columns.tolist())
+                right_df = right_df.drop_duplicates(subset=dedup_cols)
+
+            elif group_right_table_flag == "Y" and right_columns:
+                # Grouping case
+                if deduplicate_flag == "Y":
+                    dedup_cols = list(right_key_col) + (right_columns if right_columns else right_df.columns.tolist())
+                    right_df = right_df.drop_duplicates(subset=dedup_cols)
+
+                # ✅ define group_cols here (valid for both empty and non-empty)
+                group_cols = [c for c in right_columns if c not in right_key_col]
+
+                if right_df.empty:
+                    expanded_cols = [
+                        f"{col}{i}"
+                        for col in group_cols
+                        for i in range(1, MAX_GROUP_VALUES + 1)
+                    ]
+                    grouped_df = pd.DataFrame(columns=list(right_key_col) + expanded_cols)
+                else:
+                    grouped_df = (
+                        right_df
+                        .groupby(right_key_col)
+                        .apply(transform_group)
+                        .reset_index()
+                        .drop(columns=["level_1"], errors="ignore")
+                    )
+
+                right_df = grouped_df
+                right_columns = [c for c in right_df.columns if c not in right_key_col]
+
+
+            # Identify unmatched (for log)
+            if len(left_key_col) == 1:
+                KeysNotInRightTable = final_df[~final_df[left_key_col[0]].isin(right_df[right_key_col[0]])][left_key_col[0]].unique()
+            else:
+                right_tuples = set(right_df[right_key_col].apply(tuple, axis=1))
+                KeysNotInRightTable = final_df[~final_df[left_key_col].apply(tuple, axis=1).isin(right_tuples)]
+            KeysNotInRightTable_count = len(KeysNotInRightTable)
+            left_table_count_before_join = len(final_df)
+
+            for k in left_key_col:
+                if k in final_df.columns:
+                    final_df[k] = final_df[k].apply(
+                        lambda x: str(int(x)) if isinstance(x, float) and x.is_integer() else str(x)
+                    )
+            
+            for k in right_key_col:
+                if k in right_df.columns:
+                    right_df[k] = right_df[k].apply(
+                        lambda x: str(int(x)) if isinstance(x, float) and x.is_integer() else str(x)
+                    )
+            
+            # === Perform join ===
+            final_df = final_df.merge(right_df, left_on=left_key_col, right_on=right_key_col, how="left")
+            final_df = final_df.drop_duplicates().reset_index(drop=True)
+
+            # Clean _x/_y
+            cols_to_rename, cols_to_drop = {}, []
+            for c in final_df.columns:
+                if c.endswith("_x"):
+                    oc = c[:-2]
+                    cols_to_rename[c] = oc
+                    cols_to_drop.append(f"{oc}_y")
+            final_df.rename(columns=cols_to_rename, inplace=True)
+            final_df.drop(columns=cols_to_drop, errors="ignore", inplace=True)
+                 
+            # Determine the left column count based on join priority
+            left_column_count = initial_left_row_count if join_priority == 1 else left_table_count_before_join
+
+            join_log_records.append({
+                "ASPIRE File Name": output_table,
+                "Join Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Left Table": left_pattern,
+                "Right Table": right_pattern,
+                "Join Type": "Left Join",
+                "Left Table Count": left_column_count,
+                "Right Table Count": len(right_df),
+                "Final Output Count": len(final_df),
+                "LeftTableKey NotFound in RightTable": KeysNotInRightTable_count
+            })
+    final_df=final_df.replace("nan", np.nan)
+    # --- ASPIRE Mapping & Output (applies to BOTH flows) ---
+    ASPIRE_mapping_file = table_config["ASPIRE Columns"].dropna().unique()[0] if "ASPIRE Columns" in table_config.columns else None
+    if ASPIRE_mapping_file:
+        mapping_df = pd.read_csv(os.path.join(ASPIRE_MAPPING_PATH, ASPIRE_mapping_file), quotechar='"', skipinitialspace=True)
+        column_map = list(zip(mapping_df["Source Column"].fillna(""), mapping_df["Target Column"].fillna("")))
+        column_order = list(mapping_df.sort_values(by="Target Column Order")["Target Column"])
+
+        conditions = {}
+        for _, r in mapping_df.iterrows():
+            if pd.notna(r.get("Condition")):
+                conditions[r["Target Column"]] = (r["Condition"], r["Condition Output"], r.get("Else", ""))
+
+        output_df = pd.DataFrame()
+        for tgt in column_order:
+            src_expr = next((s for s, t in column_map if t == tgt), None)
+            if tgt in conditions:
+                cond_expr, cond_out, cond_else = conditions[tgt]
+                if "isna()" in cond_expr:
+                    colname = cond_expr.split(".")[0]
+                    cond_series = final_df[colname].isna()
+                else:
+                    try:
+                        cond_series = final_df.eval(cond_expr)
+                    except Exception as e:
+                        cond_series = pd.Series([False] * len(final_df), index=final_df.index)
+
+                out_vals = final_df[cond_out] if cond_out in final_df.columns else cond_out
+                else_vals = final_df[cond_else] if cond_else in final_df.columns else cond_else
+                
+                # Convert out_vals to Series
+                if isinstance(out_vals, pd.Series):
+                    out_s = out_vals
+                else:
+                    out_s = pd.Series([out_vals] * len(final_df), index=final_df.index)
+
+                # Convert else_vals to Series
+                if isinstance(else_vals, pd.Series):
+                    else_s = else_vals
+                else:
+                    else_s = pd.Series([else_vals] * len(final_df), index=final_df.index)
+
+                # Ensure cond_series is a boolean Series
+                if not isinstance(cond_series, pd.Series):
+                    cond_series = pd.Series(cond_series, index=final_df.index)
+                cond_series = cond_series.fillna(False).astype(bool)
+
+                # Build object dtype result to avoid float/datetime conflicts
+                result = pd.Series(index=final_df.index, dtype="object")
+                result[cond_series] = out_s[cond_series]
+                result[~cond_series] = else_s[~cond_series]
+
+                output_df[tgt] = result
+
+            elif src_expr in final_df.columns:
+                output_df[tgt] = final_df[src_expr]
+            elif src_expr:
+                year_pat = re.match(r"year\((.*?)\)", src_expr)
+                if year_pat:
+                    dcol = year_pat.group(1)
+                    if dcol in final_df.columns:
+                        if not pd.api.types.is_datetime64_any_dtype(final_df[dcol]):
+                            #final_df[dcol] = pd.to_datetime(final_df[dcol], errors="coerce")
+                            final_df[dcol] = pd.to_datetime(final_df[dcol], errors="coerce", dayfirst=True)
+                        output_df[tgt] = final_df[dcol].dt.year.fillna("").astype(str)
+                    else:
+                        output_df[tgt] = ""
+                elif src_expr == "Blank":
+                    output_df[tgt] = ""
+                elif src_expr.startswith('"') and src_expr.endswith('"'):
+                    output_df[tgt] = src_expr.strip('"')
+                elif any(op in src_expr for op in ["+", "-", "*", "/", "//", "**"]):
+                    output_df[tgt] = final_df.eval(src_expr)
+                else:
+                    output_df[tgt] = src_expr
+            else:
+                output_df[tgt] = ""
+
+        output_df=output_df.drop_duplicates().reset_index(drop=True)
+        
+        aspire_filename = table_config["ASPIRE Files"].dropna().unique()[0] if "ASPIRE Files" in table_config.columns else output_table
+        if aspire_filename.startswith("Tmp_"):
+            # Enhancement 2: only Tmp_* → parquet in INPUT_PATH
+            out_path = os.path.join(INPUT_PATH, f"{aspire_filename}.parquet")
+            with fs.open(out_path, 'wb') as f:
+                output_df.to_parquet(f, index=False)
+            print(f" Output saved as PARQUET in INPUT_PATH: {out_path}")
+        else:
+            out_path = os.path.join(OUTPUT_PATH, f"{aspire_filename}.csv")
+            with fs.open(out_path, 'w') as f:
+                output_df.to_csv(f, index=False)
+            print(f" Output saved as CSV in OUTPUT_PATH: {out_path}")
+
+# === Logs ===
+if error_records:
+    error_log_file = os.path.join(ERROR_LOG_PATH, f"Error_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+    error_df = pd.DataFrame(error_records)
+    with fs.open(error_log_file, 'w') as f:
+        error_df.to_csv(f, index=False)
+    print(f"Error log generated: {error_log_file}")
+
+if join_log_records:
+    log_file = os.path.join(ERROR_LOG_PATH, f"Join_Log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+    with fs.open(log_file, 'w') as f:
+        pd.DataFrame(join_log_records).to_csv(f, index=False)
+    print(f"Join log saved: {log_file}")
