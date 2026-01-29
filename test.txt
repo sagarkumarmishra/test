@@ -10,3 +10,8 @@ try:
 except Exception as e:
     print("Connection failed")
     print(e)
+Here’s a **very short and clean** version you can use 👇
+
+> Tested ADP → DataHub from Azure Synapse INT.
+> Browser access works, but Synapse fails with **DNS resolution error**, indicating a network/DNS restriction.
+> Network access from Synapse INT to DataHub INT is required to proceed.
