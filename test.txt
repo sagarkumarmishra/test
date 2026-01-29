@@ -1,0 +1,29 @@
+import requests
+
+BASE_URL = "https://dhub-ui-int.cta.allianz"  # INT DataHub URL
+
+health_url = BASE_URL + "/actuator/health"
+
+try:
+    response = requests.get(health_url, timeout=10)
+    print("Status Code:", response.status_code)
+    print("Response:", response.text)
+except Exception as e:
+    print("Error connecting to DataHub:", str(e))
+
+
+
+import requests
+
+BASE_URL = "https://dhub-ui-int.cta.allianz"
+
+upload_url = BASE_URL + "/api/v1/file/upload"
+
+files = {
+    "file": ("test.csv", "id,amount\n1,100\n2,200")
+}
+
+response = requests.post(upload_url, files=files)
+
+print("Status:", response.status_code)
+print("Response:", response.text)
