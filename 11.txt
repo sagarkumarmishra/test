@@ -1,0 +1,336 @@
+import logging
+import logging.config
+import os
+from datetime import datetime
+from handler import Handler
+from dh_helper import Dh
+from dh_helper import DhException
+from dh_exposure import ExposureDH
+from dh_currency import CurrencyDH
+from dh_value_mapping import ValueMappingDH
+from dh_address_information import AddressInformationDH
+from portfolio_data import PortfolioData
+from dh_portfolio_data import DHPortfolioData
+from concurrent.futures import ThreadPoolExecutor
+from itertools import repeat
+from configparser import NoSectionError
+from dh_log import DhLog
+from sqlalchemy import text
+
+class DhAdapter(Handler):
+    """
+    DataHub Adapter - Similar to CrsAdapter
+    Handles DataHub operations for file uploads, ingestion, and metadata management
+    """
+
+    # Tables that can be processed (same as CRS but for DataHub processing)
+    TABLES = ['POLICY',
+              'POLICY_TERM',
+              'INSURED_OBJECT',
+              'INSURED_OBJECT_TERM',
+              'POLICY_CESSION',
+              'INSURED_OBJECT_CESSION',
+              ]
+
+    # Metrics tables for different DataHub operations (similar to CRS)
+    METRICS_TABLES = {'FIN_METRICS': ExposureDH,
+                      'ADDR_INF': AddressInformationDH
+                      }
+
+    # Event skeleton defines required event parameters
+    EVENT_SKELETON = {
+        'SUBMISSION_ID': '',
+    }
+
+    def __init__(self, event_id, event_data, tenant):
+        logging.config.fileConfig('logging.config', disable_existing_loggers=False, defaults=dict(
+            logfilename=os.path.join(self.LOG_DIR, __name__ + '_' + datetime.now().strftime('%Y_%m_%d.log'))))
+        self.logger = logging.getLogger(__name__)
+        self.tenant = tenant
+        super().__init__(event_id, event_data)
+        self.logger.debug(self.event_data)
+
+    def upload_exposure(self, submission_id, table_name, tenant):
+
+        with DHPortfolioData(self.engine, submission_id, table_name) as tbl:
+            exposure = ExposureDH(None, tenant, submission_id, table=tbl)
+            exposure.main()
+
+    def upload_table(self, submission_id, table_name, tenant_id):
+        """
+        Upload table data to DataHub using DHPortfolioData
+        
+        Args:
+            submission_id (str): Submission ID
+            table_name (str): Database table name
+            tenant_id (str): Tenant ID
+            
+        Returns:
+            dict: Upload result
+        """
+        with DHPortfolioData(self.engine, submission_id, table_name) as tbl:
+            with ExposureDH(None, tenant_id, submission_id) as file_upload:
+                # Prepare table data for upload
+                prepared_data = tbl.prepare_for_datahub()
+                file_upload.upload_table_data(tbl, prepared_data)
+                return file_upload.main()
+
+    def upload_files_batch(self, submission_id, file_paths, tenant_id):
+        """
+        Upload multiple files to DataHub using thread pool (similar to upload_metrics)
+        
+        Args:
+            submission_id (str): Submission ID
+            file_paths (list): List of file paths to upload
+            tenant_id (str): Tenant ID
+            
+        Returns:
+            list: Upload results
+        """
+        results = []
+        for file_path in file_paths:
+            with ExposureDH(file_path, tenant_id, submission_id) as file_upload:
+                result = file_upload.main()
+                results.append(result)
+        return results
+
+    def upload_metrics(self, submission_id, table_name, tenant):
+        """
+        Upload metrics data to DataHub (equivalent to CRS upload_metrics)
+        
+        Args:
+            submission_id (str): Submission ID
+            table_name (str): Table name for metrics
+            tenant (str): Tenant ID
+            
+        Returns:
+            bool: Success status
+        """
+        with DHPortfolioData(self.engine, submission_id, table_name) as tbl:
+            metrics_result = self.METRICS_TABLES[table_name](tbl, tenant)
+            return metrics_result.main()
+
+    def do_all(self, tenant):
+        """
+        Main processing method - equivalent to do_all in CrsAdapter
+        Handles complete DataHub workflow following the same pattern as CRS
+        """
+        cl = DhLog()
+        try:
+            event_type = 'EXPOSURE_INGESTION_TO_DH_'
+            submission_id = self.event_data['SUBMISSION_ID']
+
+            event_params = {
+                'SUBMISSION_ID': submission_id,
+                'TENANT_ID': tenant,
+            }       
+            self.logger_base.info("event_parameter: {}".format(event_params))     
+            
+            cl.dh_log(submission_id, tenant, 'EVENT_ID : - ' + str(self.event_id) + ' EXPOSURE INGESTION STARTED')
+
+            # Step 1: Process all tables (equivalent to CRS exposure upload)
+            with ThreadPoolExecutor(6) as pool:
+                futures = pool.map(self.upload_exposure, repeat(submission_id), self.TABLES, repeat(tenant))
+                for future in futures:
+                    try:
+                        self.logger.debug(future)
+                    except Exception as exc:
+                        self.logger.debug(exc)
+                        cl.dh_log(submission_id, tenant, str(exc))
+                        raise
+
+            # DataHub equivalent of exposure processing
+            upl = ExposureDH(None, tenant, submission_id)
+            self.oe_id = upl.asp_oe_id
+            self.file_id = upl.get_file_id() if hasattr(upl, 'get_file_id') else 'unknown'
+            
+            # DataHub file ingestion and metadata processing
+            upl.ingest()
+            upl.get_resource_id()
+            #upl.set_meta_data()
+
+            self.log_to_event_log(event_params, event_type + 'SUCCESS')
+            cl.dh_log(submission_id, tenant, 'EVENT_ID : - ' + str(self.event_id) + ' ' + str(event_type) + 'SUCCESS')
+
+            # Step 2: Currency equivalent processing (DataHub metadata upload)
+            # event_type = 'CURRENCY_UPLOAD_TO_DH_'
+            # with DHPortfolioData(self.engine, submission_id, 'EXCH_RATE') as tbl:
+            #     currency = CurrencyDH(None, tenant, submission_id, table=tbl)
+            #     currency.main()
+            # self.log_to_event_log(event_params, event_type + 'SUCCESS')
+            # cl.dh_log(submission_id, tenant, 'EVENT_ID : - ' + str(self.event_id) + ' ' + str(event_type) + 'SUCCESS')
+
+            # Step 3: Value mapping equivalent processing
+            # event_type = 'VALUE_MAPPING_UPLOAD_TO_DH_'
+            # if tenant == 'AZGroup':
+            #     with DHPortfolioData(self.engine, submission_id, 'MAPPING_AZGROUP') as mapping_table:
+            #         mapping_upload = ValueMappingDH(None, tenant, submission_id, table=mapping_table)
+            #         mapping_upload.main()
+            # else:
+            #     with DHPortfolioData(self.engine, submission_id, 'MAPPING') as mapping_table:
+            #         mapping_upload = ValueMappingDH(None, tenant, submission_id, table=mapping_table)
+            #         mapping_upload.main()
+            # self.log_to_event_log(event_params, event_type + 'SUCCESS')
+            # cl.dh_log(submission_id, tenant, 'EVENT_ID : - ' + str(self.event_id) + ' ' + str(event_type) + 'SUCCESS')
+
+            # Step 4: Address info processing for non-AZGroup tenants
+            # if tenant != 'AZGroup':
+            #     event_type = 'ADDRESS_INFO_UPLOAD_TO_DH_'
+            #     with DHPortfolioData(self.engine, submission_id, 'ADDR_INF') as addr_table:
+            #         addr_upload = AddressInformationDH(None, tenant, submission_id, table=addr_table)
+            #         addr_info_happened = addr_upload.main()
+            #         self.file_id = addr_upload.get_file_id() if hasattr(addr_upload, 'get_file_id') else self.file_id
+
+            #     if addr_info_happened:
+            #         self.log_to_event_log(event_params, event_type + 'SUCCESS')
+            #         cl.dh_log(submission_id, tenant, 'EVENT_ID : - ' + str(self.event_id) + ' ' + str(event_type) + 'SUCCESS')
+
+            # Step 5: AZGroup specific processing (parallel metrics upload)
+            # if tenant == 'AZGroup':
+            #     with ThreadPoolExecutor(2) as pool:
+            #         fin_metrics = pool.submit(self.upload_metrics, submission_id, 'FIN_METRICS', tenant)
+            #         addr_info = pool.submit(self.upload_metrics, submission_id, 'ADDR_INF', tenant)
+
+            #         event_type = 'FINANCIAL_METRICS_UPLOAD_TO_DH_'
+            #         fin_metrics.result()
+            #         self.log_to_event_log(event_params, event_type + 'SUCCESS')
+            #         cl.dh_log(submission_id, tenant, 'EVENT_ID : - ' + str(self.event_id) + ' ' + str(event_type) + 'SUCCESS')
+                    
+            #         event_type = 'ADDRESS_INFO_UPLOAD_TO_DH_'
+            #         addr_info_result = addr_info.result()
+
+            #         if addr_info_result:
+            #             cl.dh_log(submission_id, tenant, 'EVENT_ID : - ' + str(self.event_id) + ' ' + str(event_type) + 'SUCCESS')
+            #             self.log_to_event_log(event_params, event_type + 'SUCCESS')
+
+            #     # Step 6: GIS Publishing equivalent (DataHub publishing)
+            #     event_type = 'GIS_PUBLISHING_TO_DH_'
+            #     with ExposureDH('DUMMY', tenant, submission_id) as publish_upload:
+            #         gis_publish_happened = publish_upload.publish_to_datahub()
+
+            #     if gis_publish_happened:
+            #         self.log_to_event_log(event_params, event_type + 'SUCCESS')
+            #         self.log_to_event_log(event_params, 'GIS_PUBLISHING_FINISHED')
+            #         cl.dh_log(submission_id, tenant, 'EVENT_ID : - ' + str(self.event_id)+ ' ' + str(event_type) + 'SUCCESS')
+
+        except NoSectionError as exc:
+            self.logger.warning(f'there is no config for {tenant}, skipping upload')
+            cl.dh_log(submission_id, tenant, f'there is no config for {tenant}, skipping upload')
+        except DhException as exc:
+            self.logger.exception(exc)
+            cl.dh_log(submission_id, tenant, 'EVENT_ID : - ' + str(self.event_id) + ' ' + str(event_type) + 'SERVICE_ERROR - ' + str(exc))
+            self.log_to_event_log(event_params, event_type + 'SERVICE_ERROR')
+        except Exception as exc:
+            self.logger.exception(exc)
+            cl.dh_log(submission_id, tenant, 'EVENT_ID : - ' + str(self.event_id) + ' ' + event_type + 'INTERNAL_ERROR - ' + str(exc))
+            self.log_to_event_log(event_params, event_type + 'INTERNAL_ERROR')
+        finally:
+            # Reset all static variables (similar to CRS pattern)
+            ExposureDH.reset()
+            # CurrencyDH.reset()
+            # ValueMappingDH.reset()
+            # AddressInformationDH.reset()
+            DHPortfolioData.reset()
+            Dh.reset()
+
+    def main(self):
+        """Main method - equivalent to main in CrsAdapter"""
+        self.mark_as_read()
+        self.do_all(self.tenant)
+        # Additional processing for specific tenant types (similar to CRS pattern)
+        if self.tenant != 'DataHub':
+            self.do_all('DH_' + self.oe_id)
+
+    def file_metadata_processing(self, tenant):
+        """
+        Additional file metadata processing (similar to addr_info_gis_publish in CrsAdapter)
+        
+        Args:
+            tenant (str): Tenant ID
+        """
+        try:
+            submission_id = self.event_data['SUBMISSION_ID']
+
+            event_params = {
+                'SUBMISSION_ID': submission_id,
+                'TENANT_ID': tenant,
+            }
+
+            event_type = 'FILE_METADATA_PROCESSING_TO_DH_'
+            
+            # Process file metadata for specific files
+            if hasattr(self, 'file_id'):
+                with ExposureDH(None, tenant, submission_id) as file_upload:
+                    file_upload.set_resource_id(self.file_id)
+                    
+                    # Set additional metadata based on tenant
+                    tenant_metadata = {
+                        'tenant_specific_processing': tenant,
+                        'processing_timestamp': datetime.now().isoformat(),
+                        'workflow_stage': 'metadata_enhancement'
+                    }
+                    
+                    metadata_result = file_upload.set_file_metadata(tenant_metadata)
+                    
+                if metadata_result:
+                    self.log_to_event_log(event_params, event_type + 'SUCCESS')
+
+            # Additional ingestion processing for DataHub tenant
+            if tenant == 'DataHub':
+                event_type = 'INGESTION_MONITORING_TO_DH_'
+                
+                if hasattr(self, 'ingestion_id'):
+                    with ExposureDH(None, tenant, submission_id) as file_upload:
+                        file_upload.set_ingestion_id(self.ingestion_id)
+                        status_result = file_upload.dh.get_ingestion_status(self.ingestion_id)
+                        
+                    if status_result.get('status', '').upper() in ['COMPLETED', 'SUCCESS', 'FINISHED']:
+                        self.log_to_event_log(event_params, event_type + 'SUCCESS')
+                        self.log_to_event_log(event_params, 'INGESTION_MONITORING_FINISHED')
+
+        except NoSectionError as exc:
+            self.logger.warning(f'there is no config for {tenant}, skipping metadata processing')
+        except DhException as exc:
+            self.logger.exception(exc)
+            self.log_to_event_log(event_params, event_type + 'SERVICE_ERROR')
+        except Exception as exc:
+            self.logger.exception(exc)
+            self.log_to_event_log(event_params, event_type + 'INTERNAL_ERROR')
+        finally:
+            ExposureDH.reset()
+            CurrencyDH.reset()
+            ValueMappingDH.reset()
+            AddressInformationDH.reset()
+            DHPortfolioData.reset()
+            Dh.reset()
+
+    def do_file_monitoring(self):
+        """
+        File monitoring workflow (similar to do_ai_gp in CrsAdapter)
+        Checks for existing file processing status and performs additional operations if needed
+        """
+        self.mark_as_read()
+
+        # Check if there are existing file uploads for this submission
+        with self.engine.connect() as conn:
+            rs = conn.execute(text('''
+                                SELECT
+                                    count(resource_id) file_count
+                                FROM
+                                    asp_gdwhsas.dh_resource
+                                WHERE
+                                        submission_id = :submission_id
+                                    AND tenant = 'DataHub'
+                              '''),
+                              {
+                              'submission_id': self.event_data['SUBMISSION_ID']
+            }
+                              )
+            file_processing_happened = rs.fetchone().file_count
+            
+        # If no previous processing, perform file metadata processing for all relevant tenants
+        if not file_processing_happened:
+            self.file_metadata_processing('DataHub')
+            if hasattr(self, 'tenant') and self.tenant != 'DataHub':
+                self.file_metadata_processing('DH_' + self.tenant)
+            self.file_metadata_processing('DataHub')
