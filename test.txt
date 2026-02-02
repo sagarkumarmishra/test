@@ -61,3 +61,39 @@ except Exception as e:
 
 
 
+import requests
+
+url = "https://dhub-ui-int.cta.allianz/actuator/health"
+
+response = requests.get(url, timeout=30)
+
+print("Status code:", response.status_code)
+print("Response:", response.text)
+
+
+
+
+
+import requests
+
+url = "https://dhub-ui-int.cta.allianz/api/v1/ingestion"
+
+headers = {
+    "Authorization": "Bearer <ACCESS_TOKEN>",
+    "Content-Type": "application/json"
+}
+
+payload = {
+    "source": "synapse",
+    "dataset": "test",
+    "records": 1
+}
+
+response = requests.post(url, headers=headers, json=payload)
+
+print(response.status_code)
+print(response.text)
+
+
+
+
