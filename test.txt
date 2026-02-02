@@ -137,3 +137,27 @@ socket.gethostbyname("dhub-int.cta.allianz")
 
 
 
+import requests
+import socket
+
+URL = "https://dhub-int.cta.allianz/actuator/health"
+
+print("Testing DNS resolution...")
+try:
+    print("IP:", socket.gethostbyname("dhub-int.cta.allianz"))
+except Exception as e:
+    print("❌ DNS FAILED:", e)
+
+print("\nCalling DataHub API...")
+try:
+    r = requests.get(URL, timeout=10)
+    print("✅ Connected")
+    print("Status Code:", r.status_code)
+    print("Response:", r.text)
+except Exception as e:
+    print("❌ API Call Failed")
+    print(e)
+
+
+
+
