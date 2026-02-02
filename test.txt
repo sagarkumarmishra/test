@@ -105,4 +105,35 @@ except Exception as e:
 
 
 
+import requests
+
+url = "https://dhub-int.cta.allianz/api/v1/ingestion"
+
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer <YOUR_TOKEN_IF_REQUIRED>"
+}
+
+payload = {
+    "message": "hello from synapse python"
+}
+
+response = requests.post(
+    url,
+    json=payload,
+    headers=headers,
+    timeout=30
+)
+
+print("Status code:", response.status_code)
+print("Response:", response.text)
+
+
+
+
+import socket
+socket.gethostbyname("dhub-int.cta.allianz")
+
+
+
 
