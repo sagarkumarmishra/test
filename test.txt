@@ -48,7 +48,14 @@ print(response.text)
 
 
 
+import requests
 
+try:
+    response = requests.get("https://www.google.com", timeout=10)
+    print("Public internet WORKS! Status:", response.status_code)
+    print("Snippet:", response.text[:200])
+except Exception as e:
+    print("Public outbound also fails:", str(e))
 
 
 
