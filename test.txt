@@ -161,4 +161,11 @@ except Exception as e:
 
 "C:\Program Files\Python314\python.exe" -m pip install requests
 
+"C:\Program Files\Python314\python.exe" -m ensurepip --upgrade
+
+py "C:\Users\esit6ay\OneDrive - Allianz\Desktop\test.py"
+
+
+"C:\Program Files\Python314\python.exe" -c "import requests; print(requests.__version__)"
+
 
