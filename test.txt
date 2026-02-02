@@ -96,4 +96,13 @@ print(response.text)
 
 
 
+import socket
+
+try:
+    print(socket.gethostbyname("dhub-ui-int.cta.allianz"))
+except Exception as e:
+    print("DNS failed:", e)
+
+
+
 
