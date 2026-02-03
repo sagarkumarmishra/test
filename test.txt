@@ -177,97 +177,31 @@ py "C:\Users\esit6ay\OneDrive - Allianz\Desktop\test.py"
 
 
 
-Yes, Sagar — you **can** add parameters to your REST linked service named **Datahub** (even with **Anonymous** authentication and **Self-hosted Integration Runtime** selected). This allows making the **Base URL** dynamic (or parts of it), which is useful for switching environments, adding paths dynamically, or future-proofing.
+from notebookutils import mssparkutils
+import time
 
-However, from your screenshot, the **Parameters** section is collapsed/empty in the UI, and the **Base URL** field doesn't show a direct "Add dynamic content" button like some other connectors. This is common for REST linked services — the UI support for parameters is limited or hidden, so you need the **Advanced JSON mode** to add them reliably.
+# Your pipeline name
+pipeline_name = "PL_Call_Datahub"  # change if different
 
-Follow these exact **step-by-step instructions** (baby steps, do one at a time):
+print("Starting Datahub call...")
 
-### Step 1: Open the edit screen again (you're already there)
-- You're in **Edit linked service** for **Datahub**.
-- Keep everything as-is for now (Self-hosted IR selected, Anonymous, Enable certificate validation checked, Base URL = `https://dhub-int.cta.allianz`).
+# Trigger the pipeline
+run_id = mssparkutils.pipeline.run(pipeline_name)
+print("Pipeline started - Run ID:", run_id)
 
-### Step 2: Switch to Advanced JSON mode to add parameters
-1. Scroll to the very bottom of the edit screen.
-2. Expand the **Advanced** section (it might say **Advanced** with a little arrow ▼ or ▶).
-3. Check the box: **Specify dynamic contents in JSON format** (this is crucial — it unlocks full JSON editing).
-   - Once checked, the UI will show a big JSON editor box with the current definition of your linked service.
+# Wait for finish (simple check)
+status = "InProgress"
+for _ in range(30):  # wait up to ~5 min
+    time.sleep(10)
+    run = mssparkutils.pipeline.get_run(pipeline_name, run_id)
+    status = run.status
+    print("Current status:", status)
+    
+    if status not in ["InProgress", "Queued"]:
+        break
 
-### Step 3: Edit the JSON to add a parameter and make Base URL dynamic
-Replace the content in the JSON box with this updated version (copy-paste carefully):
-
-```json
-{
-  "name": "Datahub",
-  "properties": {
-    "type": "RestService",
-    "typeProperties": {
-      "url": "@{linkedService().BaseUrl}",
-      "enableServerCertificateValidation": true,
-      "authenticationType": "Anonymous"
-    },
-    "connectVia": {
-      "referenceName": "SelfHostedIntegrationRuntime",
-      "type": "IntegrationRuntimeReference"
-    },
-    "parameters": {
-      "BaseUrl": {
-        "type": "String",
-        "defaultValue": "https://dhub-int.cta.allianz"
-      }
-    }
-  }
-}
-```
-
-- Key changes explained:
-  - Added `"parameters"` section with `BaseUrl` (String type + default value so it works immediately).
-  - Changed `"url"` to `"@{linkedService().BaseUrl}"` — this references the new parameter dynamically.
-  - Kept your Self-hosted IR reference and Anonymous auth.
-  - `enableServerCertificateValidation`: true (matches your UI choice; change to false only if you have cert trust issues during testing).
-
-**Important notes**:
-- The `referenceName` under `connectVia` must exactly match your Self-hosted IR name (you have "SelfHostedIntegrationRuntime" — confirm it matches exactly; if it's different like "SHIR-Allianz-Prod", update it).
-- Indentation must be correct (JSON is picky).
-
-### Step 4: Save and Test connection
-1. Click **Save** at the bottom.
-2. Wait a moment → then click **Test connection** (the blue button).
-   - It should succeed (green check) because the default value is your current URL.
-   - If it fails:
-     - "Invalid URI" or parsing error → double-check the JSON syntax (no extra commas, quotes correct).
-     - Connection error → temporarily set `"enableServerCertificateValidation": false` in JSON, save & re-test (self-signed/internal cert issue?).
-     - IR-related → confirm your Self-hosted IR is online/running in **Manage → Integration runtimes**.
-
-### Step 5: Use the parameter in practice (e.g., in a dataset or activity)
-Once saved:
-- Create/edit a **REST dataset** using this linked service.
-  - In the dataset → **Relative URL** (or path) can be dynamic (e.g., `/actuator/health`).
-  - Full call = Base URL (from linked service param) + Relative URL.
-- In a **pipeline**:
-  - Add **Web activity** or **Copy activity** (with REST source).
-  - In the activity settings → Linked service parameters section → set `BaseUrl` dynamically, e.g.:
-    - `@pipeline().parameters.MyEnvUrl` (if you create a pipeline parameter)
-    - Or hardcode for test: `https://dhub-int.cta.allianz`
-- For notebook/PySpark: You can't pass linked service parameters directly from code, but you can trigger a pipeline (with params) using `mssparkutils.pipeline.run()`.
-
-### Step 6: Verify everything works
-- After saving → go back to **Develop** tab.
-- Create a simple **Web activity** in a new pipeline:
-  - Use linked service **Datahub**.
-  - Set URL (if needed): `/actuator/health` (relative).
-  - Method: GET.
-  - Debug/run the pipeline → check output for 200 OK + response body (e.g., {"status":"UP"}).
-- If successful → your linked service is parameterized and connected via Self-hosted IR!
-
-### Common issues & fixes
-- **Parameters section still not visible after save?** → Normal in REST UI; it only shows in JSON mode. You don't need the collapsed Parameters accordion anymore.
-- **Test connection fails after JSON change?** → Revert to your original non-dynamic JSON temporarily to confirm, then fix syntax.
-- **Want more parameters?** → Add to the `"parameters"` object, e.g. `"ApiPath": { "type": "String", "defaultValue": "/actuator" }`, then use in URL like `"url": "@{concat(linkedService().BaseUrl, linkedService().ApiPath, '/health')}"`.
-
-Do these steps now, and reply with:
-- Did **Test connection** succeed after JSON save?
-- Any error message (exact text)?
-- If you want to add more params (e.g. for path or env), tell me.
-
-You're very close — this should unlock dynamic connectivity! 🚀
+if status == "Succeeded":
+    print("Success! Datahub responded.")
+    # Response body is in UI: Monitor tab → Pipeline runs → click this run → Web activity output
+else:
+    print("Failed. Check Monitor tab for details.")
