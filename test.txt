@@ -177,31 +177,57 @@ py "C:\Users\esit6ay\OneDrive - Allianz\Desktop\test.py"
 
 
 
-from notebookutils import mssparkutils
+import requests
+import json
 import time
 
-# Your pipeline name
-pipeline_name = "PL_Call_Datahub"  # change if different
+# === Replace these ===
+workspace_name = "synw-cta-0001-tst-cr"  # your workspace name
+pipeline_name = "PL_Tst_Datahub_con"
+subscription_id = "your-subscription-id"  # from Azure portal
+resource_group = "your-resource-group"
 
-print("Starting Datahub call...")
+# Synapse dev endpoint (find in Synapse Studio URL or portal)
+synapse_endpoint = f"https://{workspace_name}.dev.azuresynapse.net"
 
-# Trigger the pipeline
-run_id = mssparkutils.pipeline.run(pipeline_name)
-print("Pipeline started - Run ID:", run_id)
+# API version
+api_version = "2020-12-01"
 
-# Wait for finish (simple check)
-status = "InProgress"
-for _ in range(30):  # wait up to ~5 min
-    time.sleep(10)
-    run = mssparkutils.pipeline.get_run(pipeline_name, run_id)
-    status = run.status
-    print("Current status:", status)
-    
-    if status not in ["InProgress", "Queued"]:
-        break
+# Trigger URL
+trigger_url = f"{synapse_endpoint}/pipelines/{pipeline_name}/createRun?api-version={api_version}"
 
-if status == "Succeeded":
-    print("Success! Datahub responded.")
-    # Response body is in UI: Monitor tab → Pipeline runs → click this run → Web activity output
-else:
-    print("Failed. Check Monitor tab for details.")
+# Headers - use managed identity if possible (Synapse notebook identity)
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + mssparkutils.credentials.getToken("https://dev.azuresynapse.net/.default")  # AAD token
+}
+
+# Optional parameters if your pipeline has them
+body = {}  # e.g. {"param1": "value1"}
+
+try:
+    response = requests.post(trigger_url, headers=headers, json=body)
+    if response.status_code in [200, 202]:
+        run_id = response.json().get("runId")
+        print(f"Pipeline triggered! Run ID: {run_id}")
+        
+        # Simple status poll (get run status)
+        status_url = f"{synapse_endpoint}/pipelineruns/{run_id}?api-version={api_version}"
+        status = "InProgress"
+        for _ in range(30):
+            time.sleep(10)
+            status_resp = requests.get(status_url, headers=headers)
+            if status_resp.status_code == 200:
+                status = status_resp.json().get("status")
+                print(f"Status: {status}")
+                if status not in ["InProgress", "Queued"]:
+                    break
+        
+        if status == "Succeeded":
+            print("Success! Check Monitor tab for response body.")
+        else:
+            print(f"Failed with status: {status}")
+    else:
+        print(f"Trigger failed: {response.status_code} - {response.text}")
+except Exception as e:
+    print("Error:", str(e))
