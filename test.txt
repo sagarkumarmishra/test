@@ -177,37 +177,24 @@ py "C:\Users\esit6ay\OneDrive - Allianz\Desktop\test.py"
 
 
 
-Yes, **it is possible** to define parameters inside your REST linked service named **Datahub** (even with **Anonymous** authentication), and then use dynamic values at runtime — including making the base URL (or parts of it) dynamic.
+Yes, Sagar — you **can** add parameters to your REST linked service named **Datahub** (even with **Anonymous** authentication and **Self-hosted Integration Runtime** selected). This allows making the **Base URL** dynamic (or parts of it), which is useful for switching environments, adding paths dynamically, or future-proofing.
 
-This feature exists in both Azure Data Factory and Azure Synapse Analytics (they share the same engine). Parameterizing a linked service is especially useful for:
+However, from your screenshot, the **Parameters** section is collapsed/empty in the UI, and the **Base URL** field doesn't show a direct "Add dynamic content" button like some other connectors. This is common for REST linked services — the UI support for parameters is limited or hidden, so you need the **Advanced JSON mode** to add them reliably.
 
-- Switching environments (e.g., dev/test/prod URLs)
-- Using different base paths or subdomains
-- Passing values from pipeline parameters
+Follow these exact **step-by-step instructions** (baby steps, do one at a time):
 
-Since your authentication is **Anonymous** (no credentials needed), it's straightforward — no secrets involved.
+### Step 1: Open the edit screen again (you're already there)
+- You're in **Edit linked service** for **Datahub**.
+- Keep everything as-is for now (Self-hosted IR selected, Anonymous, Enable certificate validation checked, Base URL = `https://dhub-int.cta.allianz`).
 
-### Step-by-step: How to add parameters to your REST linked service
+### Step 2: Switch to Advanced JSON mode to add parameters
+1. Scroll to the very bottom of the edit screen.
+2. Expand the **Advanced** section (it might say **Advanced** with a little arrow ▼ or ▶).
+3. Check the box: **Specify dynamic contents in JSON format** (this is crucial — it unlocks full JSON editing).
+   - Once checked, the UI will show a big JSON editor box with the current definition of your linked service.
 
-1. Go to **Manage** tab → **Linked services** → edit your linked service named **Datahub**.
-
-2. In the edit screen:
-   - Scroll down or look for **Parameters** section (sometimes under "Advanced").
-   - Click **+ New** to add parameters.
-   - Example: Add a parameter named `BaseUrl` (type: String)
-     - Default value (optional): `https://dhub-int.cta.allianz` (so it works without changes initially)
-
-3. In the **Base URL** field (currently probably hardcoded as `https://dhub-int.cta.allianz`):
-   - Switch to dynamic content mode (click "Add dynamic content" or the {} icon).
-   - Enter: `@{linkedService().BaseUrl}`
-     - This references the parameter you just created.
-
-4. **Save** the linked service.
-   - Test connection should still work if you kept the default value.
-
-**Alternative (JSON mode – more reliable if UI is glitchy):**
-- In the linked service edit screen → expand **Advanced** at bottom → check **Specify dynamic contents in JSON format**.
-- Edit the JSON directly. Example full payload:
+### Step 3: Edit the JSON to add a parameter and make Base URL dynamic
+Replace the content in the JSON box with this updated version (copy-paste carefully):
 
 ```json
 {
@@ -216,8 +203,12 @@ Since your authentication is **Anonymous** (no credentials needed), it's straigh
     "type": "RestService",
     "typeProperties": {
       "url": "@{linkedService().BaseUrl}",
-      "enableServerCertificateValidation": true,  // or false if self-signed cert issues
+      "enableServerCertificateValidation": true,
       "authenticationType": "Anonymous"
+    },
+    "connectVia": {
+      "referenceName": "SelfHostedIntegrationRuntime",
+      "type": "IntegrationRuntimeReference"
     },
     "parameters": {
       "BaseUrl": {
@@ -229,42 +220,54 @@ Since your authentication is **Anonymous** (no credentials needed), it's straigh
 }
 ```
 
-- Save and test connection.
+- Key changes explained:
+  - Added `"parameters"` section with `BaseUrl` (String type + default value so it works immediately).
+  - Changed `"url"` to `"@{linkedService().BaseUrl}"` — this references the new parameter dynamically.
+  - Kept your Self-hosted IR reference and Anonymous auth.
+  - `enableServerCertificateValidation`: true (matches your UI choice; change to false only if you have cert trust issues during testing).
 
-### How this helps you connect / use it
+**Important notes**:
+- The `referenceName` under `connectVia` must exactly match your Self-hosted IR name (you have "SelfHostedIntegrationRuntime" — confirm it matches exactly; if it's different like "SHIR-Allianz-Prod", update it).
+- Indentation must be correct (JSON is picky).
 
-- **Base URL becomes dynamic** → you can pass different values at runtime (e.g., from pipeline parameters).
-- In a **dataset** (REST type) using this linked service:
-  - Add a parameter like `RelativePath` (String)
-  - In dataset → Relative URL: `@{dataset().RelativePath}`
+### Step 4: Save and Test connection
+1. Click **Save** at the bottom.
+2. Wait a moment → then click **Test connection** (the blue button).
+   - It should succeed (green check) because the default value is your current URL.
+   - If it fails:
+     - "Invalid URI" or parsing error → double-check the JSON syntax (no extra commas, quotes correct).
+     - Connection error → temporarily set `"enableServerCertificateValidation": false` in JSON, save & re-test (self-signed/internal cert issue?).
+     - IR-related → confirm your Self-hosted IR is online/running in **Manage → Integration runtimes**.
 
-- In a **Copy activity**, **Lookup**, or **Web activity**:
-  - Pass values when running the pipeline:
-    - Pipeline parameter: `pBaseUrl` = `https://dhub-int.cta.allianz`
-    - In activity → linked service parameters → `BaseUrl` = `@pipeline().parameters.pBaseUrl`
+### Step 5: Use the parameter in practice (e.g., in a dataset or activity)
+Once saved:
+- Create/edit a **REST dataset** using this linked service.
+  - In the dataset → **Relative URL** (or path) can be dynamic (e.g., `/actuator/health`).
+  - Full call = Base URL (from linked service param) + Relative URL.
+- In a **pipeline**:
+  - Add **Web activity** or **Copy activity** (with REST source).
+  - In the activity settings → Linked service parameters section → set `BaseUrl` dynamically, e.g.:
+    - `@pipeline().parameters.MyEnvUrl` (if you create a pipeline parameter)
+    - Or hardcode for test: `https://dhub-int.cta.allianz`
+- For notebook/PySpark: You can't pass linked service parameters directly from code, but you can trigger a pipeline (with params) using `mssparkutils.pipeline.run()`.
 
-- For PySpark notebook usage (limited direct support):
-  - You cannot directly pass linked service parameters from notebook code.
-  - But you can use the linked service in **Copy/Lookup/Web activity** inside a pipeline, then trigger the pipeline from notebook (via `mssparkutils.notebook.run()` or pipeline run API) → pass parameters there.
+### Step 6: Verify everything works
+- After saving → go back to **Develop** tab.
+- Create a simple **Web activity** in a new pipeline:
+  - Use linked service **Datahub**.
+  - Set URL (if needed): `/actuator/health` (relative).
+  - Method: GET.
+  - Debug/run the pipeline → check output for 200 OK + response body (e.g., {"status":"UP"}).
+- If successful → your linked service is parameterized and connected via Self-hosted IR!
 
-### Example use cases with your URL
+### Common issues & fixes
+- **Parameters section still not visible after save?** → Normal in REST UI; it only shows in JSON mode. You don't need the collapsed Parameters accordion anymore.
+- **Test connection fails after JSON change?** → Revert to your original non-dynamic JSON temporarily to confirm, then fix syntax.
+- **Want more parameters?** → Add to the `"parameters"` object, e.g. `"ApiPath": { "type": "String", "defaultValue": "/actuator" }`, then use in URL like `"url": "@{concat(linkedService().BaseUrl, linkedService().ApiPath, '/health')}"`.
 
-| Scenario | Parameter setup | Value passed at runtime | Resulting full URL |
-|----------|-----------------|--------------------------|---------------------|
-| Fixed URL | `BaseUrl` = `https://dhub-int.cta.allianz` | (default) | `https://dhub-int.cta.allianz` |
-| Different env | `BaseUrl` + `Env` param | `Env` = `tst` | `https://dhub-tst.cta.allianz` (if you concat in expression) |
-| Add path | Keep base fixed, use dataset `RelativeUrl` | `/actuator/health` | `https://dhub-int.cta.allianz/actuator/health` |
+Do these steps now, and reply with:
+- Did **Test connection** succeed after JSON save?
+- Any error message (exact text)?
+- If you want to add more params (e.g. for path or env), tell me.
 
-### Quick test in UI
-
-- After parameterizing → create a simple **Web activity** in a pipeline.
-- Use your linked service **Datahub**.
-- In Web activity URL: leave blank or put relative path only (e.g. `/actuator/health`).
-- Pipeline parameter → pass `BaseUrl` if needed.
-- Debug/run → see if it hits the endpoint successfully.
-
-If you run into issues (e.g. "Invalid URL", connection fail, or UI not showing parameters), reply with:
-- Screenshot/error message
-- Current JSON of the linked service (copy from Advanced JSON view)
-
-Then I can give exact fixes or expressions. This should resolve your connectivity goal using the approved linked service path! 🚀
+You're very close — this should unlock dynamic connectivity! 🚀
