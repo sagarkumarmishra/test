@@ -410,3 +410,22 @@ If you want, next I can:
 * Add **payload example**
 * Add **retry + logging**
 * Help you write **JIRA update in 3 lines**
+
+
+
+Got it 👍 — here are **3 short messages**, **only about today’s work**, written clean and technical, ready to send **one by one** on Teams.
+
+---
+
+**Message 1**
+Today I tested DataHub connectivity from Synapse notebooks using Python APIs. Direct calls to `https://dhub-int.cta.allianz` failed with DNS/NameResolution errors, even though the URL is accessible in the browser.
+
+---
+
+**Message 2**
+I then created a REST Linked Service in Synapse with the DataHub base URL (Anonymous auth, AutoResolve/SelfHosted IR) and attempted to access it from a notebook using `mssparkutils.credentials.getConnectionStringOrCreds`. This failed because Synapse notebooks do not support SelfHosted/interactive authentication for REST linked services.
+
+---
+
+**Message 3**
+As of today’s findings, notebook-based API testing is blocked without a non-interactive auth mechanism (SPN/token/API key) and proper private endpoint/DNS support for Synapse. Next step is to align on the supported connectivity/auth approach from the DataHub side.
