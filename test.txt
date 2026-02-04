@@ -231,3 +231,182 @@ try:
         print(f"Trigger failed: {response.status_code} - {response.text}")
 except Exception as e:
     print("Error:", str(e))
+-----
+Perfect — now we have **everything**.
+I’ll explain this **like a story**, then give you **exact notebook code** you can run **as-is**.
+
+---
+
+## 🧠 The story (layman, honest)
+
+1. **Your DataHub URL is NOT public**
+
+   * That’s why:
+
+     * Browser ❌ sometimes
+     * Local CMD / Notepad++ ❌ always
+     * DNS error ❌
+   * This is **normal** for private/internal services.
+
+2. **Your Synapse works because**
+
+   * You are using **SelfHostedIntegrationRuntime**
+   * That IR sits **inside Allianz network**
+   * So DNS + routing works there ✅
+
+3. **Linked Service = the ONLY bridge**
+
+   * You **cannot** magically use Linked Service from local Python
+   * You **must** run code **inside Synapse notebook**
+   * Linked Service handles:
+
+     * Network
+     * DNS
+     * Routing
+
+4. **Your Linked Service is correct**
+
+   * Name: `Datahub`
+   * Type: `REST`
+   * Base URL: `https://dhub-int.cta.allianz`
+   * Auth: `Anonymous`
+   * IR: `SelfHostedIntegrationRuntime`
+
+👉 So the solution is **Notebook → read LS → call API**
+
+---
+
+## ✅ What WILL work (final architecture)
+
+```
+Synapse Notebook
+   ↓
+mssparkutils.credentials (Linked Service)
+   ↓
+SelfHosted IR (network + DNS)
+   ↓
+https://dhub-int.cta.allianz
+```
+
+---
+
+## 🧪 FINAL working Synapse Notebook code (copy–paste)
+
+### 🔹 Cell 1 — Resolve Linked Service base URL
+
+```python
+from notebookutils import mssparkutils
+
+# Get linked service details
+ls_name = "Datahub"
+creds = mssparkutils.credentials.getConnectionStringOrCreds(ls_name)
+
+base_url = creds["url"]  # comes from linked service Base URL
+print("Base URL from Linked Service:", base_url)
+```
+
+✅ Expected output:
+
+```
+Base URL from Linked Service: https://dhub-int.cta.allianz
+```
+
+---
+
+### 🔹 Cell 2 — Simple health/API test (NO pipeline, pure code)
+
+```python
+import requests
+
+endpoint = "/actuator/health"   # simple safe endpoint
+url = base_url + endpoint
+
+print("Calling:", url)
+
+response = requests.get(
+    url,
+    timeout=30,
+    verify=False   # internal certs, common in corp env
+)
+
+print("Status code:", response.status_code)
+print("Response:")
+print(response.text)
+```
+
+---
+
+## 🧾 How to read the result
+
+### ✅ **These mean SUCCESS**
+
+* `200` → API is up
+* `401 / 403` → Network OK, auth needed
+* `503` → API reached, service issue (not your problem)
+
+### ❌ **These mean config issue**
+
+* `NameResolutionError` → wrong IR / not using LS
+* Timeout → firewall / backend down
+
+---
+
+## 🚫 What NOT to do (important)
+
+❌ Do **NOT** try:
+
+```python
+requests.get("https://dhub-int.cta.allianz")
+```
+
+(from local machine or without LS)
+
+❌ Do **NOT** use:
+
+```text
+@linkedService().BaseUrl
+```
+
+(This works only in pipelines, NOT notebooks)
+
+---
+
+## ✅ Why your earlier Web Activity showed 503
+
+That was **GOOD news** 👍
+It means:
+
+* DNS ✔
+* Network ✔
+* Endpoint ✔
+* Only backend was temporarily unavailable
+
+---
+
+## 🧩 Next (only if you want to SEND data)
+
+Once health works, sending data is just:
+
+```python
+requests.post(
+    base_url + "/api/v1/ingestion",
+    json=payload,
+    headers={"Content-Type": "application/json"},
+    verify=False
+)
+```
+
+---
+
+## 🔚 Final truth (clear & direct)
+
+* ❌ Local Python will **never** work
+* ❌ Notepad++ is irrelevant here
+* ✅ Synapse Notebook + Linked Service = correct way
+* ✅ Your setup is **already correct**
+
+If you want, next I can:
+
+* Add **payload example**
+* Add **retry + logging**
+* Help you write **JIRA update in 3 lines**
