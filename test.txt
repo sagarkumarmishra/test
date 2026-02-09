@@ -446,3 +446,231 @@ richardhitecfuel@gmail.com
   }
 }
 
+
+
+
+
+Alright, let’s **reset cleanly and do this from beginning → end**, **pipeline-only**, **API-only**, and **copy-paste friendly**.
+I’ll also explain *why your earlier things failed* in simple language as we go.
+
+---
+
+## First: why notebook & expressions failed (1-minute clarity)
+
+* **Notebook failed** because:
+
+  * Your DataHub URL is reachable only via **Self-Hosted IR**
+  * **Synapse notebooks cannot use Self-Hosted IR for REST calls**
+  * They also **cannot reuse REST Linked Service auth**
+    👉 So notebooks are **not supported** for this scenario
+
+* **Expression error**:
+
+  ```
+  'linkedservice' is not a recognized function
+  ```
+
+  Because:
+
+  * **linkedservice() does NOT exist in pipeline expressions**
+  * Base URL is **already applied automatically** by the Linked Service
+
+So in pipelines:
+✅ **You give only the relative path**
+❌ **Never build full URL manually**
+
+---
+
+# ✅ CORRECT & WORKING WAY (PIPELINE)
+
+We will:
+
+1. Use **REST Linked Service**
+2. Use **Web Activity**
+3. Send **JSON data**
+4. Test connectivity + ingestion
+
+---
+
+## STEP 1: Linked Service (you already did this – verify only)
+
+**Manage → Linked services → Datahub**
+
+| Field               | Value                          |
+| ------------------- | ------------------------------ |
+| Type                | REST                           |
+| Name                | `Datahub`                      |
+| Integration Runtime | `SelfHostedIntegrationRuntime` |
+| Base URL            | `https://dhub-int.cta.allianz` |
+| Auth                | Anonymous                      |
+
+✅ **No parameters needed**
+✅ **Do NOT use @{linkedservice().BaseUrl}**
+
+---
+
+## STEP 2: Create Pipeline
+
+**Integrate → New Pipeline**
+Name it:
+
+```
+PL_Test_Datahub_Ingest
+```
+
+---
+
+## STEP 3: Add Web Activity
+
+Drag **Web** activity → rename it:
+
+```
+WA_Send_Datahub
+```
+
+---
+
+## STEP 4: Web Activity – General tab (COPY PASTE)
+
+### General
+
+* Name: `WA_Send_Datahub`
+* Linked service: **Datahub**
+
+---
+
+## STEP 5: Web Activity – Settings tab (IMPORTANT)
+
+### URL
+
+👉 **ONLY RELATIVE PATH**
+
+```
+/api/v1/ingest
+```
+
+### Method
+
+```
+POST
+```
+
+### Headers (click **+ New**)
+
+| Key          | Value            |
+| ------------ | ---------------- |
+| Content-Type | application/json |
+
+---
+
+### Body (COPY PASTE EXACTLY)
+
+```json
+{
+  "source": "synapse-test",
+  "timestamp": "@{utcnow()}",
+  "message": "Test payload from Azure Synapse pipeline"
+}
+```
+
+✅ Expression inside JSON is allowed
+✅ This confirms pipeline → DataHub → payload send
+
+---
+
+## STEP 6: Timeout & Retry (Optional but recommended)
+
+* Timeout: `00:02:00`
+* Retry: `1`
+* Retry interval: `30`
+
+---
+
+## STEP 7: Validate & Debug
+
+Click:
+
+```
+Validate → Debug
+```
+
+---
+
+## STEP 8: How to CHECK OUTPUT (VERY IMPORTANT)
+
+After debug run:
+
+1. Go to **Monitor**
+2. Open pipeline run
+3. Click **WA_Send_Datahub**
+4. Open **Output**
+
+### SUCCESS looks like:
+
+* HTTP **200 / 201 / 202**
+* Response body or acknowledgement
+
+### FAILURE but request reached server:
+
+* HTTP **400 / 401 / 403**
+  👉 means **network is OK**, API logic/auth issue
+
+### FAILURE with:
+
+```
+The remote name could not be resolved
+```
+
+👉 means **network / DNS / IR issue**
+
+---
+
+## STEP 9: Meaning of your JSON you pasted
+
+This part:
+
+```json
+"effectiveIntegrationRuntime": "SelfHostedIntegrationRuntime"
+```
+
+Means:
+✅ Pipeline **correctly used Self-Hosted IR**
+✅ Request **left Synapse successfully**
+
+If it fails **after this**, problem is:
+
+* API endpoint
+* Auth
+* Payload
+* DataHub side validation
+
+---
+
+## STEP 10: What to tell DataHub team if it still fails
+
+Say this (copy):
+
+> We are calling DataHub via Synapse pipeline Web activity using REST Linked Service on Self-Hosted IR. Network routing works. Please confirm correct ingest endpoint path, required headers, and payload contract for `/api/v1/ingest`.
+
+---
+
+## FINAL TRUTH (very important)
+
+| Method                    | Works? | Reason                    |
+| ------------------------- | ------ | ------------------------- |
+| Notebook + Python         | ❌      | No Self-Hosted IR support |
+| Notebook + Linked Service | ❌      | REST LS not accessible    |
+| Pipeline + Web Activity   | ✅      | Fully supported           |
+| Pipeline + REST LS        | ✅      | Correct approach          |
+
+---
+
+If you want, next I can:
+
+* Adjust body **exactly as DataHub expects**
+* Add **token / header auth**
+* Add **retry + logging**
+* Convert response → ADLS
+
+Just say 👍
+
