@@ -685,3 +685,215 @@ Just say 👍
   }
 }
 
+-------------------------------------------------------------------------
+
+
+
+
+Perfect 👍 — VS Code is actually the **best** place to do this.
+Let’s lock this down **cleanly, step by step**, exactly for **VS Code + Python**, no Synapse, no confusion.
+
+---
+
+## STEP 0 — Pre-checks (don’t skip)
+
+1. **Allianz VPN is connected**
+2. In **browser**, this opens:
+
+   ```
+   https://dhub-int.cta.allianz
+   ```
+
+   ✅ If browser opens → proceed
+   ❌ If not → network/DNS issue (code won’t work anywhere)
+
+---
+
+## STEP 1 — Verify Python in VS Code
+
+Open **VS Code Terminal** (Ctrl + `):
+
+```bash
+python --version
+```
+
+You should see **Python 3.8+**
+
+If not:
+
+* `Ctrl + Shift + P`
+* **Python: Select Interpreter**
+* Choose the correct one
+
+---
+
+## STEP 2 — Install dependency (VS Code terminal)
+
+```bash
+pip install requests
+```
+
+Verify:
+
+```bash
+python -c "import requests; print('requests OK')"
+```
+
+---
+
+## STEP 3 — Create Python file
+
+In VS Code:
+
+* New file → `datahub_post.py`
+
+---
+
+## STEP 4 — Paste this EXACT working code
+
+```python
+import requests
+import json
+from datetime import datetime
+
+BASE_URL = "https://dhub-int.cta.allianz"
+ENDPOINT = "/api/v1/ingest"   # MUST be confirmed by backend
+URL = BASE_URL + ENDPOINT
+
+headers = {
+    "Content-Type": "application/json",
+    "Accept": "application/json"
+}
+
+payload = {
+    "eventTime": datetime.utcnow().isoformat(),
+    "source": "vs-code-python",
+    "data": {
+        "policyId": "POL1001",
+        "status": "ACTIVE",
+        "amount": 4500
+    }
+}
+
+print("➡ Sending POST request to DataHub...")
+print("URL:", URL)
+
+try:
+    response = requests.post(
+        URL,
+        headers=headers,
+        json=payload,
+        timeout=30
+    )
+
+    print("✅ Status Code:", response.status_code)
+
+    if response.text:
+        try:
+            print("Response JSON:", response.json())
+        except Exception:
+            print("Response Text:", response.text)
+
+except requests.exceptions.RequestException as e:
+    print("❌ Connection error")
+    print(e)
+```
+
+---
+
+## STEP 5 — Run it (VS Code)
+
+### Option A (Recommended)
+
+```bash
+python datahub_post.py
+```
+
+### Option B
+
+Click ▶ **Run Python File**
+
+---
+
+## STEP 6 — Read output correctly
+
+### ✅ SUCCESS
+
+```
+Status Code: 200 / 201
+```
+
+🎉 Real-time data successfully sent.
+
+---
+
+### ❌ 404 Not Found
+
+```
+endpoint does not exist
+```
+
+👉 Endpoint path is wrong
+👉 Ask backend for **exact POST path**
+
+---
+
+### ❌ 406 Not Acceptable
+
+```
+cannot produce acceptable response
+```
+
+👉 Payload schema mismatch
+👉 Headers or body format expected differently
+
+---
+
+### ❌ NameResolutionError
+
+```
+Failed to resolve dhub-int.cta.allianz
+```
+
+👉 VPN / DNS / corporate firewall issue
+👉 NOT a Python issue
+
+---
+
+## STEP 7 — Quick GET sanity test (VERY IMPORTANT)
+
+Run this **first** if POST fails:
+
+```python
+import requests
+
+url = "https://dhub-int.cta.allianz"
+r = requests.get(url, timeout=20)
+
+print("Status:", r.status_code)
+print("Body:", r.text)
+```
+
+If GET works → POST issue is endpoint/payload only.
+
+---
+
+## STEP 8 — What you should tell backend (copy to Teams)
+
+> I can reach [https://dhub-int.cta.allianz](https://dhub-int.cta.allianz) from browser and Python.
+> Please confirm:
+> • Exact POST endpoint path
+> • Expected JSON payload schema
+> • Mandatory headers
+> • Authentication requirement
+
+---
+
+## Final clarity (important)
+
+* ❌ Synapse Notebook failure = **IR + Linked Service limitation**
+* ✅ VS Code Python = **correct approach**
+* ❌ Current errors = endpoint/payload mismatch
+* ✅ Your direction is 100% correct
+
+If you paste **backend API contract / curl / swagger**, I’ll convert it into a **guaranteed-working Python script** for VS Code.
