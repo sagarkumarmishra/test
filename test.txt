@@ -897,3 +897,53 @@ If GET works → POST issue is endpoint/payload only.
 * ✅ Your direction is 100% correct
 
 If you paste **backend API contract / curl / swagger**, I’ll convert it into a **guaranteed-working Python script** for VS Code.
+
+
+---
+
+import requests
+from datetime import datetime, timezone
+import json
+import urllib3
+
+# Disable SSL warnings (for testing only)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+BASE_URL = "https://dhub-int.cta.allianz"
+ENDPOINT = "/api/v1/file/upload"
+URL = BASE_URL + ENDPOINT
+
+headers = {
+    "Content-Type": "application/json",
+    "Accept": "application/json"
+}
+
+payload = {
+    "eventTime": datetime.now(timezone.utc).isoformat(),
+    "source": "vs-code-python",
+    "fileName": "test_file.json",
+    "data": {
+        "policyId": "POL123",
+        "status": "ACTIVE",
+        "amount": 1000
+    }
+}
+
+print("➡ Sending POST request to DataHub...")
+print("URL:", URL)
+
+try:
+    response = requests.post(
+        URL,
+        headers=headers,
+        json=payload,
+        timeout=30,
+        verify=False  # 🔥 THIS FIXES YOUR ERROR
+    )
+
+    print("✅ Status Code:", response.status_code)
+    print("Response:", response.text)
+
+except requests.exceptions.RequestException as e:
+    print("❌ Connection error")
+    print(e)
