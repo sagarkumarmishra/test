@@ -429,3 +429,20 @@ I then created a REST Linked Service in Synapse with the DataHub base URL (Anony
 
 **Message 3**
 As of today’s findings, notebook-based API testing is blocked without a non-interactive auth mechanism (SPN/token/API key) and proper private endpoint/DNS support for Synapse. Next step is to align on the supported connectivity/auth approach from the DataHub side.
+
+
+richardhitecfuel@gmail.com
+
+
+
+
+{
+  "source": "synapse",
+  "environment": "INT",
+  "payload": {
+    "id": 101,
+    "name": "Pipeline test",
+    "message": "Hello DataHub from Synapse Pipeline"
+  }
+}
+
