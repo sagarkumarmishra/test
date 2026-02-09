@@ -674,3 +674,14 @@ If you want, next I can:
 
 Just say 👍
 
+
+{
+  "source": "ADF",
+  "eventType": "test_ingest",
+  "timestamp": "@{utcNow()}",
+  "payload": {
+    "message": "Test POST from ADF Web Activity",
+    "env": "INT"
+  }
+}
+
