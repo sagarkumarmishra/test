@@ -989,3 +989,53 @@ response = requests.post(
 
 print("Status Code:", response.status_code)
 print("Response:", response.text)
+
+-----------------------------------------------------------
+import requests
+import urllib3
+from datetime import datetime, timezone
+import json
+
+# Disable SSL warnings (internal cert)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+URL = "https://dhub-int.cta.allianz/api/v1/file/upload"
+
+headers = {
+    "Accept": "application/json"
+}
+
+# Payload
+file_content = {
+    "eventTime": datetime.now(timezone.utc).isoformat(),
+    "policyId": "POL123",
+    "status": "ACTIVE",
+    "amount": 1000
+}
+
+files = {
+    "file": (
+        "test_data.json",
+        json.dumps(file_content),
+        "application/json"
+    )
+}
+
+print("➡ Sending FILE upload to DataHub...")
+
+response = requests.post(
+    URL,
+    headers=headers,
+    files=files,
+    verify=False,
+    timeout=30
+)
+
+print("Status Code:", response.status_code)
+print("Response:", response.text)
+
+
+
+
+
+
