@@ -1078,55 +1078,85 @@ except Exception as e:
     print(f"Error: {e}")
 
 555555555555555555555555555555555555555555555555
-!nslookup dhub-int.cta.allianz 44.79.188.68
+**✅ Understood.** The `nslookup` result (`connection timed out; no servers could be reached`) means the Spark pool **cannot reach** your custom DNS server at `44.79.188.68` (no network route, firewall/NSG block, or VNet peering missing).
 
+This is common in Azure Synapse because Spark pools run in a managed environment with restricted outbound networking.
+
+### Immediate Diagnostics (Run these one by one)
+
+Run each in a new cell:
+
+**1. Default system resolution (most important)**
+
+```python
+import socket
+try:
+    ip = socket.gethostbyname("dhub-int.cta.allianz")
+    print(f"✅ Default resolution succeeded: {ip}")
+except Exception as e:
+    print(f"❌ Default resolution failed: {e}")
+```
+
+**2. Basic reachability to DNS server**
+
+```python
+!ping -c 3 44.79.188.68
+```
+
+**3. Try direct connection using hostname (no custom DNS)**
+
+```python
+import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+HOST = "dhub-int.cta.allianz"
+URL = f"https://{HOST}/api/v1/file/upload"
+
+headers = {"Accept": "application/json", "Host": HOST}
+
+# (add your file_content and files dict here)
+
+try:
+    response = requests.post(URL, headers=headers, files=files, verify=False, timeout=30)
+    print("Status:", response.status_code)
+    print("Response:", response.text)
+except Exception as e:
+    print("Error:", e)
+```
+
+### Best Code Without Any Extra Packages (Using Built-in `socket`)
+
+If the default resolution above works, use this full code:
+
+```python
 from pyspark.sql import SparkSession
 import requests
 import urllib3
 from datetime import datetime, timezone
 import json
-import subprocess
+import socket
 
 spark = SparkSession.builder.getOrCreate()
-
-# Suppress SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 HOST = "dhub-int.cta.allianz"
-DNS_SERVER = "44.79.188.68"
 
-# === Resolve using nslookup (no extra packages) ===
-def resolve_host(host, dns_server):
-    try:
-        result = subprocess.run(
-            ["nslookup", host, dns_server],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        # Parse output to extract the IP address
-        for line in result.stdout.splitlines():
-            if "Address:" in line and not line.strip().startswith("Server:"):
-                ip = line.split()[-1].strip()
-                print(f"✅ Resolved IP: {ip}")
-                return ip
-        
-        print("❌ Could not parse IP from nslookup output")
-        print("nslookup output:\n", result.stdout)
-        raise ValueError("DNS resolution failed")
-        
-    except Exception as e:
-        print(f"❌ DNS Resolution error: {e}")
-        raise
-
-ip = resolve_host(HOST, DNS_SERVER)
+# Resolve using system resolver (no extra packages)
+try:
+    ip = socket.gethostbyname(HOST)
+    print(f"✅ Resolved IP via system: {ip}")
+except Exception as e:
+    print(f"❌ System resolution failed: {e}")
+    # Fallback: If you know the IP, hardcode it here
+    # ip = "10.x.x.x"   # ← replace with actual IP
+    raise
 
 URL = f"https://{ip}/api/v1/file/upload"
 
 headers = {
     "Accept": "application/json",
-    "Host": HOST          # Very important
+    "Host": HOST
 }
 
 file_content = {
@@ -1141,16 +1171,25 @@ files = {
 }
 
 try:
-    print("🚀 Sending file upload to Datahub...")
+    print("🚀 Sending upload...")
     response = requests.post(
-        URL,
-        headers=headers,
-        files=files,
-        verify=False,
-        timeout=30
+        URL, headers=headers, files=files, 
+        verify=False, timeout=30
     )
     print("Status Code:", response.status_code)
     print("Response:", response.text)
-
 except Exception as e:
     print(f"❌ Error: {e}")
+```
+
+### What to do next
+
+- Paste the output of the 3 diagnostic cells above.
+- If **default resolution succeeds** → use the socket code (no custom DNS needed).
+- If **everything fails** → the Spark pool has no network path to the internal DNS or the host.  
+  **You will need to involve your network / Azure admin** to:
+  - Add the DNS server to the VNet custom DNS settings.
+  - Set up VNet peering or Private DNS Zone for `cta.allianz`.
+  - Or get the current IP of `dhub-int.cta.allianz` from another machine (e.g., Azure VM in same network) and hardcode it temporarily.
+
+Reply with the diagnostic results and I’ll give the exact next fix.
