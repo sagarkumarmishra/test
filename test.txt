@@ -1078,56 +1078,36 @@ except Exception as e:
     print(f"Error: {e}")
 
 555555555555555555555555555555555555555555555555
-**✅ Understood.** The `nslookup` result (`connection timed out; no servers could be reached`) means the Spark pool **cannot reach** your custom DNS server at `44.79.188.68` (no network route, firewall/NSG block, or VNet peering missing).
+**✅ Perfect, the ipconfig image is very useful!**
 
-This is common in Azure Synapse because Spark pools run in a managed environment with restricted outbound networking.
+Your laptop is correctly joined to the Allianz corporate network:
+- DNS server → **44.79.188.68** (same one you were using)
+- DNS search suffixes include **muc.allianz** (Munich) and **srv.allianz**
 
-### Immediate Diagnostics (Run these one by one)
+This explains why resolution works on your laptop but **not** in Synapse — Synapse Spark pools don’t inherit your corporate DNS settings by default.
 
-Run each in a new cell:
+### Best & Simplest Solution Right Now (No .whl, No Extra Packages)
 
-**1. Default system resolution (most important)**
+**Hardcode the IP** (bypass DNS completely in Synapse).
 
-```python
-import socket
-try:
-    ip = socket.gethostbyname("dhub-int.cta.allianz")
-    print(f"✅ Default resolution succeeded: {ip}")
-except Exception as e:
-    print(f"❌ Default resolution failed: {e}")
+#### Step 1: Get the IP from your laptop
+Open **Command Prompt** (or PowerShell) on your Windows machine and run:
+
+```cmd
+nslookup dhub-int.cta.allianz
 ```
 
-**2. Basic reachability to DNS server**
+or (more reliable):
 
-```python
-!ping -c 3 44.79.188.68
+```cmd
+nslookup dhub-int.cta.allianz 44.79.188.68
 ```
 
-**3. Try direct connection using hostname (no custom DNS)**
+→ Copy the **IP address** shown under “Address:” (e.g., `10.x.x.x` or whatever it returns).
 
-```python
-import requests
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+#### Step 2: Use this clean code in Synapse
 
-HOST = "dhub-int.cta.allianz"
-URL = f"https://{HOST}/api/v1/file/upload"
-
-headers = {"Accept": "application/json", "Host": HOST}
-
-# (add your file_content and files dict here)
-
-try:
-    response = requests.post(URL, headers=headers, files=files, verify=False, timeout=30)
-    print("Status:", response.status_code)
-    print("Response:", response.text)
-except Exception as e:
-    print("Error:", e)
-```
-
-### Best Code Without Any Extra Packages (Using Built-in `socket`)
-
-If the default resolution above works, use this full code:
+Paste and run this (replace `YOUR_RESOLVED_IP_HERE` with the IP you just got):
 
 ```python
 from pyspark.sql import SparkSession
@@ -1135,28 +1115,22 @@ import requests
 import urllib3
 from datetime import datetime, timezone
 import json
-import socket
 
 spark = SparkSession.builder.getOrCreate()
+
+# Suppress SSL warnings for internal cert
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 HOST = "dhub-int.cta.allianz"
+ip = "YOUR_RESOLVED_IP_HERE"        # ← Paste the IP from nslookup here
 
-# Resolve using system resolver (no extra packages)
-try:
-    ip = socket.gethostbyname(HOST)
-    print(f"✅ Resolved IP via system: {ip}")
-except Exception as e:
-    print(f"❌ System resolution failed: {e}")
-    # Fallback: If you know the IP, hardcode it here
-    # ip = "10.x.x.x"   # ← replace with actual IP
-    raise
+print(f"✅ Using hardcoded IP: {ip}")
 
 URL = f"https://{ip}/api/v1/file/upload"
 
 headers = {
     "Accept": "application/json",
-    "Host": HOST
+    "Host": HOST                    # Critical — tells the server the original hostname
 }
 
 file_content = {
@@ -1171,25 +1145,30 @@ files = {
 }
 
 try:
-    print("🚀 Sending upload...")
+    print("🚀 Sending file upload to Datahub...")
     response = requests.post(
-        URL, headers=headers, files=files, 
-        verify=False, timeout=30
+        URL,
+        headers=headers,
+        files=files,
+        verify=False,      # internal/self-signed certificate
+        timeout=30
     )
     print("Status Code:", response.status_code)
     print("Response:", response.text)
+
 except Exception as e:
     print(f"❌ Error: {e}")
 ```
 
 ### What to do next
+1. Run the `nslookup` on your laptop now.
+2. Paste the IP into the code and execute.
+3. Reply with:
+   - The IP you got
+   - The full output from the notebook (success or error)
 
-- Paste the output of the 3 diagnostic cells above.
-- If **default resolution succeeds** → use the socket code (no custom DNS needed).
-- If **everything fails** → the Spark pool has no network path to the internal DNS or the host.  
-  **You will need to involve your network / Azure admin** to:
-  - Add the DNS server to the VNet custom DNS settings.
-  - Set up VNet peering or Private DNS Zone for `cta.allianz`.
-  - Or get the current IP of `dhub-int.cta.allianz` from another machine (e.g., Azure VM in same network) and hardcode it temporarily.
+This is the fastest way to test whether the **network path** from Synapse to the endpoint exists.
 
-Reply with the diagnostic results and I’ll give the exact next fix.
+If it still fails with “connection refused” or “network unreachable”, then we need to fix the Azure networking (VNet peering / Private Endpoint / Managed VNet DNS settings). I’ll guide you on that once we have the result.
+
+Go ahead and run the nslookup — I’m ready when you are.
