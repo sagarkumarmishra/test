@@ -1079,26 +1079,33 @@ except Exception as e:
 
 555555555555555555555555555555555555555555555555
 
+%pip install dnspython
+
 from pyspark.sql import SparkSession
 import requests
 import urllib3
 from datetime import datetime, timezone
 import json
-import socket
+import dns.resolver
 
 spark = SparkSession.builder.getOrCreate()
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-URL = "https://dhub-int.cta.allianz/api/v1/file/upload"
-headers = {"Accept": "application/json"}
+HOST = "dhub-int.cta.allianz"
+DNS_SERVER = "REPLACE_WITH_YOUR_COMPANY_DNS_IP"  # e.g., "10.0.0.53"
 
-try:
-    # Test DNS resolution
-    ip = socket.gethostbyname('dhub-int.cta.allianz')
-    print(f"Resolved IP: {ip}")
-except Exception as e:
-    print(f"DNS Resolution Error: {e}")
-    raise  # Stop if DNS fails
+# Resolve IP using custom DNS
+my_resolver = dns.resolver.Resolver()
+my_resolver.nameservers = [DNS_SERVER]
+answers = my_resolver.resolve(HOST)
+ip = str(answers[0])
+print(f"Resolved IP: {ip}")
+
+URL = f"https://{ip}/api/v1/file/upload"
+headers = {
+    "Accept": "application/json",
+    "Host": HOST  # Important for server to know the original host
+}
 
 file_content = {
     "eventTime": datetime.now(timezone.utc).isoformat(),
