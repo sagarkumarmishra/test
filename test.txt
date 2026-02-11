@@ -1079,7 +1079,7 @@ except Exception as e:
 
 555555555555555555555555555555555555555555555555
 
-%pip install dnspython
+%pip install /dbfs/FileStore/libraries/dnspython-2.8.0-py3-none-any.whl
 
 from pyspark.sql import SparkSession
 import requests
@@ -1088,25 +1088,35 @@ from datetime import datetime, timezone
 import json
 import dns.resolver
 
+# Initialize Spark
 spark = SparkSession.builder.getOrCreate()
+
+# Suppress SSL warnings (internal/self-signed cert)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 HOST = "dhub-int.cta.allianz"
-DNS_SERVER = "REPLACE_WITH_YOUR_COMPANY_DNS_IP"  # e.g., "10.0.0.53"
+DNS_SERVER = "44.79.188.68"
 
-# Resolve IP using custom DNS
+# === Resolve hostname using internal DNS ===
 my_resolver = dns.resolver.Resolver()
 my_resolver.nameservers = [DNS_SERVER]
-answers = my_resolver.resolve(HOST)
-ip = str(answers[0])
-print(f"Resolved IP: {ip}")
+
+try:
+    answers = my_resolver.resolve(HOST, "A")
+    ip = str(answers[0])
+    print(f"✅ Resolved IP: {ip}")
+except Exception as e:
+    print(f"❌ DNS Resolution failed: {e}")
+    raise
 
 URL = f"https://{ip}/api/v1/file/upload"
+
 headers = {
     "Accept": "application/json",
-    "Host": HOST  # Important for server to know the original host
+    "Host": HOST          # Very important for virtual hosting
 }
 
+# File content
 file_content = {
     "eventTime": datetime.now(timezone.utc).isoformat(),
     "policyId": "POL123",
@@ -1119,9 +1129,17 @@ files = {
 }
 
 try:
-    print("➡ Sending FILE upload to DataHub...")
-    response = requests.post(URL, headers=headers, files=files, verify=False, timeout=30)
+    print("🚀 Sending file upload to Datahub...")
+    response = requests.post(
+        URL,
+        headers=headers,
+        files=files,
+        verify=False,      # internal certificate
+        timeout=30
+    )
+    
     print("Status Code:", response.status_code)
     print("Response:", response.text)
+
 except Exception as e:
-    print(f"Error: {e}")
+    print(f"❌ Error: {e}")
