@@ -1078,45 +1078,57 @@ except Exception as e:
     print(f"Error: {e}")
 
 555555555555555555555555555555555555555555555555
-
-%pip install /dbfs/FileStore/libraries/dnspython-2.8.0-py3-none-any.whl
+!nslookup dhub-int.cta.allianz 44.79.188.68
 
 from pyspark.sql import SparkSession
 import requests
 import urllib3
 from datetime import datetime, timezone
 import json
-import dns.resolver
+import subprocess
 
-# Initialize Spark
 spark = SparkSession.builder.getOrCreate()
 
-# Suppress SSL warnings (internal/self-signed cert)
+# Suppress SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 HOST = "dhub-int.cta.allianz"
 DNS_SERVER = "44.79.188.68"
 
-# === Resolve hostname using internal DNS ===
-my_resolver = dns.resolver.Resolver()
-my_resolver.nameservers = [DNS_SERVER]
+# === Resolve using nslookup (no extra packages) ===
+def resolve_host(host, dns_server):
+    try:
+        result = subprocess.run(
+            ["nslookup", host, dns_server],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        # Parse output to extract the IP address
+        for line in result.stdout.splitlines():
+            if "Address:" in line and not line.strip().startswith("Server:"):
+                ip = line.split()[-1].strip()
+                print(f"✅ Resolved IP: {ip}")
+                return ip
+        
+        print("❌ Could not parse IP from nslookup output")
+        print("nslookup output:\n", result.stdout)
+        raise ValueError("DNS resolution failed")
+        
+    except Exception as e:
+        print(f"❌ DNS Resolution error: {e}")
+        raise
 
-try:
-    answers = my_resolver.resolve(HOST, "A")
-    ip = str(answers[0])
-    print(f"✅ Resolved IP: {ip}")
-except Exception as e:
-    print(f"❌ DNS Resolution failed: {e}")
-    raise
+ip = resolve_host(HOST, DNS_SERVER)
 
 URL = f"https://{ip}/api/v1/file/upload"
 
 headers = {
     "Accept": "application/json",
-    "Host": HOST          # Very important for virtual hosting
+    "Host": HOST          # Very important
 }
 
-# File content
 file_content = {
     "eventTime": datetime.now(timezone.utc).isoformat(),
     "policyId": "POL123",
@@ -1134,10 +1146,9 @@ try:
         URL,
         headers=headers,
         files=files,
-        verify=False,      # internal certificate
+        verify=False,
         timeout=30
     )
-    
     print("Status Code:", response.status_code)
     print("Response:", response.text)
 
