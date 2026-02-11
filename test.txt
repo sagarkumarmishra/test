@@ -1172,3 +1172,26 @@ This is the fastest way to test whether the **network path** from Synapse to the
 If it still fails with “connection refused” or “network unreachable”, then we need to fix the Azure networking (VNet peering / Private Endpoint / Managed VNet DNS settings). I’ll guide you on that once we have the result.
 
 Go ahead and run the nslookup — I’m ready when you are.
+
+
+
+------------------------------------
+import socket
+
+ip = "44.79.190.6"
+port = 443
+
+try:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(10)
+    result = sock.connect_ex((ip, port))
+    
+    if result == 0:
+        print("✅ Port 443 is reachable!")
+    else:
+        print(f"❌ Connection failed (error code: {result})")
+        print("This means no network route or firewall block.")
+    
+    sock.close()
+except Exception as e:
+    print(f"❌ Socket error: {e}")
