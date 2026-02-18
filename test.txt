@@ -1385,8 +1385,96 @@ Then:
 5️⃣ Select this notebook
 6️⃣ Debug
 
-That’s it.
+Got it 👍
+I’ll keep it simple and natural.
+
+You just want to check:
+
+> “Can my Spark notebook reach the DataHub URL?”
+
+No data sending. Just connection check.
 
 ---
 
-Now run code #1 first and tell me what you get.
+## Open your Spark notebook (PySpark)
+
+Create a new cell and paste this:
+
+```python
+import requests
+import urllib3
+
+# Ignore SSL warnings (internal certificate)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+url = "https://dhub-int.cta.allianz"
+
+print("Trying to connect...")
+
+try:
+    r = requests.get(url, verify=False, timeout=10)
+    print("Connected.")
+    print("Status code:", r.status_code)
+except Exception as e:
+    print("Connection failed.")
+    print("Error:", e)
+```
+
+Run it.
+
+---
+
+### How to understand the result
+
+If you see something like:
+
+```
+Connected.
+Status code: 200
+```
+
+or even:
+
+```
+Status code: 404
+```
+
+That’s fine.
+It means Spark can reach the server.
+
+---
+
+If you see:
+
+* timeout
+* name resolution error
+* connection refused
+
+Then Spark cannot reach DataHub (network issue).
+
+---
+
+If you want to test the exact API endpoint instead of just the base URL, use this:
+
+```python
+import requests
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+url = "https://dhub-int.cta.allianz/api/v1/file/upload"
+
+print("Checking API endpoint...")
+
+try:
+    r = requests.get(url, verify=False, timeout=10)
+    print("Reached API.")
+    print("Status code:", r.status_code)
+except Exception as e:
+    print("Could not reach API.")
+    print("Error:", e)
+```
+
+---
+
+Run the first one and tell me what status code you get.
