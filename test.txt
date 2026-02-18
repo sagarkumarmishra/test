@@ -1195,3 +1195,198 @@ try:
     sock.close()
 except Exception as e:
     print(f"❌ Socket error: {e}")
+
+
+-----------------------------------------------------------------------------------------------------------------
+Perfect 👍
+You want **ready-to-run Python codes** to test DataHub from a **Synapse Spark Notebook**.
+
+I’ll give you **4 simple versions**:
+
+1️⃣ Basic connectivity test
+2️⃣ GET test
+3️⃣ JSON POST test
+4️⃣ Multipart FILE upload (the one that worked)
+
+You can run them one by one in notebook cells.
+
+---
+
+# 🟢 BEFORE YOU START (IMPORTANT)
+
+Open:
+
+**Develop → Notebook → New Notebook → PySpark**
+
+Then create separate cells and run each code.
+
+Also paste this at top of every test (for SSL):
+
+```python
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+```
+
+---
+
+# ✅ 1️⃣ TEST BASIC CONNECTIVITY (PING DOMAIN)
+
+This checks if Spark can reach DataHub server.
+
+```python
+import requests
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+url = "https://dhub-int.cta.allianz"
+
+try:
+    response = requests.get(url, verify=False, timeout=10)
+    print("Status Code:", response.status_code)
+    print("Connected successfully")
+except Exception as e:
+    print("Connection failed")
+    print(e)
+```
+
+👉 If this fails → Spark network cannot reach DataHub.
+
+---
+
+# ✅ 2️⃣ TEST SIMPLE GET ENDPOINT
+
+```python
+import requests
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+url = "https://dhub-int.cta.allianz/api/v1/file/upload"
+
+response = requests.get(url, verify=False)
+
+print("Status Code:", response.status_code)
+print("Response:", response.text)
+```
+
+👉 You may get 405 or 404. That’s OK.
+We just check reachability.
+
+---
+
+# ✅ 3️⃣ TEST RAW JSON POST (will likely fail with 415)
+
+```python
+import requests
+import urllib3
+from datetime import datetime, timezone
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+url = "https://dhub-int.cta.allianz/api/v1/file/upload"
+
+payload = {
+    "eventTime": datetime.now(timezone.utc).isoformat(),
+    "policyId": "POL123",
+    "status": "ACTIVE",
+    "amount": 1000
+}
+
+headers = {
+    "Accept": "application/json",
+    "Content-Type": "application/json"
+}
+
+response = requests.post(url, headers=headers, json=payload, verify=False)
+
+print("Status Code:", response.status_code)
+print("Response:", response.text)
+```
+
+👉 Expected: 415 (Unsupported Media Type)
+
+That confirms endpoint wants file upload.
+
+---
+
+# ✅ 4️⃣ CORRECT WORKING FILE UPLOAD (THIS SHOULD WORK)
+
+This is the real one.
+
+```python
+import requests
+import urllib3
+import json
+from datetime import datetime, timezone
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+url = "https://dhub-int.cta.allianz/api/v1/file/upload"
+
+file_content = {
+    "eventTime": datetime.now(timezone.utc).isoformat(),
+    "policyId": "POL123",
+    "status": "ACTIVE",
+    "amount": 1000
+}
+
+files = {
+    "file": (
+        "test_data.json",
+        json.dumps(file_content),
+        "application/json"
+    )
+}
+
+headers = {
+    "Accept": "application/json"
+}
+
+response = requests.post(
+    url,
+    headers=headers,
+    files=files,
+    verify=False
+)
+
+print("Status Code:", response.status_code)
+print("Response:", response.text)
+```
+
+👉 Expected:
+
+```
+Status Code: 200
+```
+
+---
+
+# 🧠 How To Understand Results
+
+| Status Code      | Meaning               |
+| ---------------- | --------------------- |
+| Connection error | Spark network blocked |
+| 404              | Wrong URL             |
+| 405              | Wrong method          |
+| 415              | Wrong content type    |
+| 200              | SUCCESS 🎉            |
+
+---
+
+# 🚀 What To Do After It Works
+
+Then:
+
+1️⃣ Save notebook
+2️⃣ Go to Integrate
+3️⃣ Create Pipeline
+4️⃣ Add Notebook activity
+5️⃣ Select this notebook
+6️⃣ Debug
+
+That’s it.
+
+---
+
+Now run code #1 first and tell me what you get.
