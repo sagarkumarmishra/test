@@ -1,0 +1,165 @@
+Below is a **clean Spark notebook script** you can run.
+It’s written simply and similar to what a developer would normally write.
+
+This does **three things**:
+
+1. Check DataHub base connection
+2. Check the API endpoint
+3. Upload a small JSON file to DataHub
+
+You can run it **cell by cell** in your Spark notebook.
+
+---
+
+# Cell 1 — Import libraries
+
+```python
+import requests
+import urllib3
+import json
+from datetime import datetime, timezone
+
+# Ignore SSL warnings for internal certs
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+```
+
+---
+
+# Cell 2 — Check base connection
+
+```python
+url = "https://dhub-int.cta.allianz"
+
+print("Checking connection to DataHub...")
+
+try:
+    r = requests.get(url, verify=False, timeout=10)
+    print("Connected.")
+    print("Status code:", r.status_code)
+except Exception as e:
+    print("Connection failed.")
+    print(e)
+```
+
+Expected result:
+
+```
+Status code: 200
+```
+
+---
+
+# Cell 3 — Check API endpoint
+
+```python
+api_url = "https://dhub-int.cta.allianz/api/v1/file/upload"
+
+print("Checking API endpoint...")
+
+try:
+    r = requests.get(api_url, verify=False, timeout=10)
+    print("Server responded.")
+    print("Status code:", r.status_code)
+except Exception as e:
+    print("Could not reach endpoint.")
+    print(e)
+```
+
+Expected result:
+
+```
+Status code: 404 or 405
+```
+
+That’s normal because the endpoint expects **POST**.
+
+---
+
+# Cell 4 — Create test JSON data
+
+```python
+data = {
+    "eventTime": datetime.now(timezone.utc).isoformat(),
+    "policyId": "POL123",
+    "status": "ACTIVE",
+    "amount": 1000
+}
+
+print("Sample data created:")
+print(data)
+```
+
+---
+
+# Cell 5 — Upload file to DataHub
+
+```python
+url = "https://dhub-int.cta.allianz/api/v1/file/upload"
+
+headers = {
+    "Accept": "application/json"
+}
+
+file_data = {
+    "file": (
+        "test_data.json",
+        json.dumps(data),
+        "application/json"
+    )
+}
+
+print("Sending file to DataHub...")
+
+try:
+    response = requests.post(
+        url,
+        headers=headers,
+        files=file_data,
+        verify=False,
+        timeout=30
+    )
+
+    print("Status code:", response.status_code)
+    print("Response:")
+    print(response.text)
+
+except Exception as e:
+    print("Upload failed.")
+    print(e)
+```
+
+---
+
+# Expected successful response
+
+You should see something like:
+
+```
+Status code: 200
+Response:
+[{"id":"a1bff353..."}]
+```
+
+That means:
+
+✔ Spark notebook connected
+✔ Data sent to DataHub
+✔ File stored successfully
+
+---
+
+# What this notebook proves
+
+Your architecture works:
+
+```
+Synapse Spark
+     ↓
+DataHub API
+     ↓
+File Uploaded
+```
+
+---
+
+If you want, I can also show you **one professional version of this script (shorter, production style)** that teams usually keep in notebooks or pipelines.
