@@ -1,83 +1,97 @@
-Below is a **clean Spark notebook script** you can run.
-It’s written simply and similar to what a developer would normally write.
-
-This does **three things**:
-
-1. Check DataHub base connection
-2. Check the API endpoint
-3. Upload a small JSON file to DataHub
-
-You can run it **cell by cell** in your Spark notebook.
+Perfect 👌 — this is exactly what you needed.
+They’ve now given you the **actual token endpoint**.
 
 ---
 
-# Cell 1 — Import libraries
+# What this means
+
+You should call this URL to get token:
+
+```id="p3j6y8"
+https://int-allianz-re.apis.allianz/edgemicro-auth-dhub/token
+```
+
+👉 This is your **Apigee auth endpoint**
+
+---
+
+# Now follow this exact working flow
+
+## Step 1 — Get token (IMPORTANT)
+
+Try this code **as it is**:
 
 ```python
 import requests
 import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+auth_url = "https://int-allianz-re.apis.allianz/edgemicro-auth-dhub/token"
+
+# try basic auth format first
+response = requests.post(
+    auth_url,
+    auth=("###dh-hub-int--u###", "###dh-hub-int--p###"),
+    verify=False
+)
+
+print("Status:", response.status_code)
+print("Response:", response.text)
+```
+
+---
+
+## What you expect
+
+If correct, you’ll get:
+
+```id="5br9sk"
+Status: 200
+{"access_token":"xxxxx"}
+```
+
+---
+
+## If this DOES NOT work
+
+Then try this version (some Apigee setups need form data):
+
+```python
+response = requests.post(
+    auth_url,
+    data={
+        "username": "###dh-hub-int--u###",
+        "password": "###dh-hub-int--p###"
+    },
+    verify=False
+)
+```
+
+---
+
+# Step 2 — Use token for upload
+
+Once you get token:
+
+```python
+token = "PASTE_TOKEN_HERE"
+```
+
+Then run:
+
+```python
 import json
 from datetime import datetime, timezone
 
-# Ignore SSL warnings for internal certs
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-```
+url = "https://dhub-int.cta.allianz/api/v1/file/upload"
 
----
+headers = {
+    "Authorization": f"Bearer {token}",
+    "Accept": "application/json",
+    "tenant": "AZRE"
+}
 
-# Cell 2 — Check base connection
-
-```python
-url = "https://dhub-int.cta.allianz"
-
-print("Checking connection to DataHub...")
-
-try:
-    r = requests.get(url, verify=False, timeout=10)
-    print("Connected.")
-    print("Status code:", r.status_code)
-except Exception as e:
-    print("Connection failed.")
-    print(e)
-```
-
-Expected result:
-
-```
-Status code: 200
-```
-
----
-
-# Cell 3 — Check API endpoint
-
-```python
-api_url = "https://dhub-int.cta.allianz/api/v1/file/upload"
-
-print("Checking API endpoint...")
-
-try:
-    r = requests.get(api_url, verify=False, timeout=10)
-    print("Server responded.")
-    print("Status code:", r.status_code)
-except Exception as e:
-    print("Could not reach endpoint.")
-    print(e)
-```
-
-Expected result:
-
-```
-Status code: 404 or 405
-```
-
-That’s normal because the endpoint expects **POST**.
-
----
-
-# Cell 4 — Create test JSON data
-
-```python
 data = {
     "eventTime": datetime.now(timezone.utc).isoformat(),
     "policyId": "POL123",
@@ -85,81 +99,47 @@ data = {
     "amount": 1000
 }
 
-print("Sample data created:")
-print(data)
-```
-
----
-
-# Cell 5 — Upload file to DataHub
-
-```python
-url = "https://dhub-int.cta.allianz/api/v1/file/upload"
-
-headers = {
-    "Accept": "application/json"
+files = {
+    "file": ("test.json", json.dumps(data), "application/json")
 }
 
-file_data = {
-    "file": (
-        "test_data.json",
-        json.dumps(data),
-        "application/json"
-    )
-}
+response = requests.post(
+    url,
+    headers=headers,
+    files=files,
+    verify=False
+)
 
-print("Sending file to DataHub...")
-
-try:
-    response = requests.post(
-        url,
-        headers=headers,
-        files=file_data,
-        verify=False,
-        timeout=30
-    )
-
-    print("Status code:", response.status_code)
-    print("Response:")
-    print(response.text)
-
-except Exception as e:
-    print("Upload failed.")
-    print(e)
+print("Status:", response.status_code)
+print(response.text)
 ```
 
 ---
 
-# Expected successful response
+# Very important notes ⚠️
 
-You should see something like:
-
-```
-Status code: 200
-Response:
-[{"id":"a1bff353..."}]
-```
-
-That means:
-
-✔ Spark notebook connected
-✔ Data sent to DataHub
-✔ File stored successfully
+* If you still get **401 → token issue**
+* If you get **403 → permission issue**
+* If you get **200 → DONE ✅**
 
 ---
 
-# What this notebook proves
+# What you can tell your team now
 
-Your architecture works:
+> I am able to reach DataHub and now trying authentication via Apigee token endpoint. Testing token generation using provided credentials.
 
-```
-Synapse Spark
-     ↓
-DataHub API
-     ↓
-File Uploaded
+---
+
+# Where you are now
+
+```id="sl3noq"
+Connection ✅
+Endpoint ✅
+Auth endpoint ✅
+→ Token (in progress)
+→ Upload (next step)
 ```
 
 ---
 
-If you want, I can also show you **one professional version of this script (shorter, production style)** that teams usually keep in notebooks or pipelines.
+If you want, send me the **token API response**, I’ll fix it instantly (no trial & error).
