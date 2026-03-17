@@ -1,25 +1,10 @@
-Perfect 👌 — this is exactly what you needed.
-They’ve now given you the **actual token endpoint**.
+Got it — here is **exact step-by-step (no confusion, just follow)** 👇
 
 ---
 
-# What this means
+# ✅ STEP 1 — Open new notebook cell
 
-You should call this URL to get token:
-
-```id="p3j6y8"
-https://int-allianz-re.apis.allianz/edgemicro-auth-dhub/token
-```
-
-👉 This is your **Apigee auth endpoint**
-
----
-
-# Now follow this exact working flow
-
-## Step 1 — Get token (IMPORTANT)
-
-Try this code **as it is**:
+Paste this:
 
 ```python
 import requests
@@ -29,7 +14,16 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 auth_url = "https://int-allianz-re.apis.allianz/edgemicro-auth-dhub/token"
 
-# try basic auth format first
+print("Step 1: Getting token...")
+```
+
+---
+
+# ✅ STEP 2 — Call token API
+
+Paste below in same cell:
+
+```python
 response = requests.post(
     auth_url,
     auth=("###dh-hub-int--u###", "###dh-hub-int--p###"),
@@ -42,43 +36,39 @@ print("Response:", response.text)
 
 ---
 
-## What you expect
+# ✅ STEP 3 — Extract token
 
-If correct, you’ll get:
+Paste below:
 
-```id="5br9sk"
+```python
+token = response.json().get("access_token")
+
+print("Token value:")
+print(token)
+```
+
+---
+
+## 👉 STOP HERE and check
+
+If you see:
+
+```text
 Status: 200
-{"access_token":"xxxxx"}
+Token: eyJhbGciOi...
 ```
+
+👉 GOOD ✅ → go next
 
 ---
 
-## If this DOES NOT work
-
-Then try this version (some Apigee setups need form data):
-
-```python
-response = requests.post(
-    auth_url,
-    data={
-        "username": "###dh-hub-int--u###",
-        "password": "###dh-hub-int--p###"
-    },
-    verify=False
-)
-```
+If NOT → send me response
 
 ---
 
-# Step 2 — Use token for upload
+# ✅ STEP 4 — Create upload request
 
-Once you get token:
-
-```python
-token = "PASTE_TOKEN_HERE"
-```
-
-Then run:
+Open **new cell** and paste:
 
 ```python
 import json
@@ -98,10 +88,24 @@ data = {
     "status": "ACTIVE",
     "amount": 1000
 }
+```
 
+---
+
+# ✅ STEP 5 — Prepare file
+
+```python
 files = {
     "file": ("test.json", json.dumps(data), "application/json")
 }
+```
+
+---
+
+# ✅ STEP 6 — Send POST request
+
+```python
+print("Step 2: Uploading file...")
 
 response = requests.post(
     url,
@@ -111,35 +115,50 @@ response = requests.post(
 )
 
 print("Status:", response.status_code)
-print(response.text)
+print("Response:", response.text)
 ```
 
 ---
 
-# Very important notes ⚠️
+# ✅ FINAL RESULT EXPECTED
 
-* If you still get **401 → token issue**
-* If you get **403 → permission issue**
-* If you get **200 → DONE ✅**
+If everything correct:
 
----
-
-# What you can tell your team now
-
-> I am able to reach DataHub and now trying authentication via Apigee token endpoint. Testing token generation using provided credentials.
-
----
-
-# Where you are now
-
-```id="sl3noq"
-Connection ✅
-Endpoint ✅
-Auth endpoint ✅
-→ Token (in progress)
-→ Upload (next step)
+```text
+Status: 200
 ```
 
 ---
 
-If you want, send me the **token API response**, I’ll fix it instantly (no trial & error).
+# 🚨 Common mistakes (avoid)
+
+❌ Don’t do this:
+
+```python
+token = "https://..."
+```
+
+❌ Don’t skip Step 1
+
+❌ Don’t forget:
+
+```python
+"Authorization": f"Bearer {token}"
+```
+
+---
+
+# 🧠 Flow in one line
+
+```text
+Get token → Use token → Upload file
+```
+
+---
+
+If it still fails, just send me:
+
+* Step 2 response
+* Step 6 status
+
+I’ll fix it immediately.
