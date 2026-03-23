@@ -1,10 +1,48 @@
-Got it — here is **exact step-by-step (no confusion, just follow)** 👇
+Perfect 👍 now everything is clear. You are on the **correct enterprise flow (Key Vault + Apigee OAuth)**.
+
+I’ll give you **exact working steps for Synapse Spark notebook** — clean and simple.
 
 ---
 
-# ✅ STEP 1 — Open new notebook cell
+# 🔥 WHAT YOU HAVE NOW
 
-Paste this:
+From DevOps:
+
+* Key Vault: `KeyVault001`
+* Secrets:
+
+  * `dhub-api-client-id`
+  * `dhub-api-client-secret`
+  * `dhub-api-token-url`
+
+👉 This means:
+
+* You **DO NOT hardcode credentials**
+* You fetch them using `mssparkutils`
+
+---
+
+# ✅ STEP-BY-STEP (FINAL WORKING FLOW)
+
+---
+
+## ✅ STEP 1 — Get secrets from Key Vault
+
+```python
+from notebookutils import mssparkutils
+
+print("Fetching secrets from Key Vault...")
+
+client_id = mssparkutils.credentials.getSecret("KeyVault001", "dhub-api-client-id")
+client_secret = mssparkutils.credentials.getSecret("KeyVault001", "dhub-api-client-secret")
+token_url = mssparkutils.credentials.getSecret("KeyVault001", "dhub-api-token-url")
+
+print("Secrets fetched successfully")
+```
+
+---
+
+## ✅ STEP 2 — Generate token (Apigee)
 
 ```python
 import requests
@@ -12,63 +50,49 @@ import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-auth_url = "https://int-allianz-re.apis.allianz/edgemicro-auth-dhub/token"
+print("Getting token from Apigee...")
 
-print("Step 1: Getting token...")
-```
+payload = {
+    "grant_type": "client_credentials",
+    "client_id": client_id,
+    "client_secret": client_secret
+}
 
----
+headers = {
+    "Content-Type": "application/x-www-form-urlencoded"
+}
 
-# ✅ STEP 2 — Call token API
-
-Paste below in same cell:
-
-```python
 response = requests.post(
-    auth_url,
-    auth=("###dh-hub-int--u###", "###dh-hub-int--p###"),
+    token_url,
+    data=payload,
+    headers=headers,
     verify=False
 )
 
 print("Status:", response.status_code)
-print("Response:", response.text)
-```
 
----
-
-# ✅ STEP 3 — Extract token
-
-Paste below:
-
-```python
 token = response.json().get("access_token")
 
-print("Token value:")
-print(token)
+print("Token received")
 ```
 
 ---
 
-## 👉 STOP HERE and check
+## ⚠️ STOP & CHECK
 
-If you see:
+If:
 
 ```text
 Status: 200
-Token: eyJhbGciOi...
 ```
 
-👉 GOOD ✅ → go next
+👉 Good → continue
+
+If not → send me response
 
 ---
 
-If NOT → send me response
-
----
-
-# ✅ STEP 4 — Create upload request
-
-Open **new cell** and paste:
+## ✅ STEP 3 — Upload file to DataHub
 
 ```python
 import json
@@ -88,24 +112,12 @@ data = {
     "status": "ACTIVE",
     "amount": 1000
 }
-```
 
----
-
-# ✅ STEP 5 — Prepare file
-
-```python
 files = {
     "file": ("test.json", json.dumps(data), "application/json")
 }
-```
 
----
-
-# ✅ STEP 6 — Send POST request
-
-```python
-print("Step 2: Uploading file...")
+print("Uploading file to DataHub...")
 
 response = requests.post(
     url,
@@ -120,9 +132,7 @@ print("Response:", response.text)
 
 ---
 
-# ✅ FINAL RESULT EXPECTED
-
-If everything correct:
+# ✅ EXPECTED RESULT
 
 ```text
 Status: 200
@@ -130,35 +140,61 @@ Status: 200
 
 ---
 
-# 🚨 Common mistakes (avoid)
-
-❌ Don’t do this:
-
-```python
-token = "https://..."
-```
-
-❌ Don’t skip Step 1
-
-❌ Don’t forget:
-
-```python
-"Authorization": f"Bearer {token}"
-```
-
----
-
-# 🧠 Flow in one line
+# 🧠 FULL FLOW (UNDERSTAND THIS)
 
 ```text
-Get token → Use token → Upload file
+KeyVault → Get client_id & secret
+        ↓
+Apigee Token API → Generate token
+        ↓
+Use token → Call DataHub API
+        ↓
+Upload file ✅
 ```
 
 ---
 
-If it still fails, just send me:
+# 🚨 COMMON ISSUES
 
-* Step 2 response
-* Step 6 status
+### ❌ 401
 
-I’ll fix it immediately.
+→ Token issue (wrong / expired)
+
+### ❌ 404
+
+→ Wrong token_url
+
+### ❌ 415
+
+→ Wrong content type (already fixed in your case)
+
+---
+
+# 🧾 WHAT YOU CAN TELL YOUR TEAM
+
+> I am now using Key Vault to fetch Apigee credentials and generating token via client_credentials flow. Proceeding with authenticated DataHub API call.
+
+---
+
+# 👍 YOU ARE VERY CLOSE
+
+You’ve already solved:
+
+* Network ✅
+* Endpoint ✅
+* Upload logic ✅
+
+Now just:
+
+```text
+Token → Attach → Done
+```
+
+---
+
+If anything fails, just paste:
+
+* Token API response
+* Upload response
+
+I’ll fix instantly 👍
