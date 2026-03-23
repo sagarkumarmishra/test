@@ -1,200 +1,157 @@
-Perfect 👍 now everything is clear. You are on the **correct enterprise flow (Key Vault + Apigee OAuth)**.
+Got it — this is a **very common Synapse issue**, not your code 👍
 
-I’ll give you **exact working steps for Synapse Spark notebook** — clean and simple.
+If it’s **running for 10+ minutes**, it means:
 
----
-
-# 🔥 WHAT YOU HAVE NOW
-
-From DevOps:
-
-* Key Vault: `KeyVault001`
-* Secrets:
-
-  * `dhub-api-client-id`
-  * `dhub-api-client-secret`
-  * `dhub-api-token-url`
-
-👉 This means:
-
-* You **DO NOT hardcode credentials**
-* You fetch them using `mssparkutils`
+👉 It is **stuck while accessing Key Vault**
+👉 Not a Python issue
+👉 Not a syntax issue
 
 ---
 
-# ✅ STEP-BY-STEP (FINAL WORKING FLOW)
+# 🚨 What’s actually wrong
+
+`mssparkutils.credentials.getSecret()` is hanging because:
+
+### ❌ Spark cannot reach Key Vault OR
+
+### ❌ Permission (access policy) issue OR
+
+### ❌ Wrong linked service name
 
 ---
 
-## ✅ STEP 1 — Get secrets from Key Vault
+# ✅ First quick check (IMPORTANT)
+
+Stop the cell ⛔
+
+Then run this **test step by step**:
+
+---
+
+## 🔹 Step 1 — Try only one secret
 
 ```python
 from notebookutils import mssparkutils
 
-print("Fetching secrets from Key Vault...")
+print("Trying single secret...")
 
 client_id = mssparkutils.credentials.getSecret("KeyVault001", "dhub-api-client-id")
-client_secret = mssparkutils.credentials.getSecret("KeyVault001", "dhub-api-client-secret")
-token_url = mssparkutils.credentials.getSecret("KeyVault001", "dhub-api-token-url")
 
-print("Secrets fetched successfully")
+print("Client ID fetched")
 ```
 
 ---
 
-## ✅ STEP 2 — Generate token (Apigee)
+## 👉 What will happen
+
+### Case 1: Still hangs ⏳
+
+→ **Network / permission issue**
+
+### Case 2: Error comes fast ⚠️
+
+→ We can fix immediately
+
+---
+
+# 🔍 Most likely root causes
+
+## 1️⃣ Linked Service name is wrong
+
+You used:
 
 ```python
-import requests
-import urllib3
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-print("Getting token from Apigee...")
-
-payload = {
-    "grant_type": "client_credentials",
-    "client_id": client_id,
-    "client_secret": client_secret
-}
-
-headers = {
-    "Content-Type": "application/x-www-form-urlencoded"
-}
-
-response = requests.post(
-    token_url,
-    data=payload,
-    headers=headers,
-    verify=False
-)
-
-print("Status:", response.status_code)
-
-token = response.json().get("access_token")
-
-print("Token received")
+"KeyVault001"
 ```
+
+👉 But in Synapse, name must match **exactly**
+
+Go check:
+
+👉 **Manage → Linked services → Key Vault**
+
+Maybe actual name is like:
+
+* `LS_KeyVault`
+* `KeyVault_LS`
+* `KV_Allianz`
 
 ---
 
-## ⚠️ STOP & CHECK
+## 2️⃣ No permission to Key Vault
 
-If:
+Spark needs access via:
+
+👉 Managed Identity OR Service Principal
+
+If missing → request hangs
+
+---
+
+## 3️⃣ Network issue
+
+If Key Vault is private:
+
+👉 Spark must be inside VNet
+👉 Or private endpoint must exist
+
+---
+
+# ⚡ Fastest way to confirm issue
+
+Ask your team this (copy paste):
+
+---
+
+Hi,
+
+I am trying to access Key Vault secrets from Synapse Spark using `mssparkutils.credentials.getSecret`, but the notebook is hanging.
+
+Could you please confirm:
+
+1. The **correct Linked Service name** for Key Vault
+2. Whether Synapse Spark has **permission to access Key Vault**
+3. If Key Vault is behind **private endpoint**, is Synapse connected to the same network
+
+---
+
+# 🧠 Important understanding
 
 ```text
-Status: 200
+Notebook running → waiting for Key Vault → no response → hangs
 ```
 
-👉 Good → continue
-
-If not → send me response
+That’s why no error is shown.
 
 ---
 
-## ✅ STEP 3 — Upload file to DataHub
+# 🛠️ Quick workaround (to unblock you)
+
+If you want to test immediately:
+
+👉 Temporarily hardcode values (just for testing)
 
 ```python
-import json
-from datetime import datetime, timezone
-
-url = "https://dhub-int.cta.allianz/api/v1/file/upload"
-
-headers = {
-    "Authorization": f"Bearer {token}",
-    "Accept": "application/json",
-    "tenant": "AZRE"
-}
-
-data = {
-    "eventTime": datetime.now(timezone.utc).isoformat(),
-    "policyId": "POL123",
-    "status": "ACTIVE",
-    "amount": 1000
-}
-
-files = {
-    "file": ("test.json", json.dumps(data), "application/json")
-}
-
-print("Uploading file to DataHub...")
-
-response = requests.post(
-    url,
-    headers=headers,
-    files=files,
-    verify=False
-)
-
-print("Status:", response.status_code)
-print("Response:", response.text)
+client_id = "your_client_id"
+client_secret = "your_client_secret"
+token_url = "your_token_url"
 ```
 
----
-
-# ✅ EXPECTED RESULT
-
-```text
-Status: 200
-```
+Then continue → so you don’t stay blocked.
 
 ---
 
-# 🧠 FULL FLOW (UNDERSTAND THIS)
+# 🎯 What you should do now
 
-```text
-KeyVault → Get client_id & secret
-        ↓
-Apigee Token API → Generate token
-        ↓
-Use token → Call DataHub API
-        ↓
-Upload file ✅
-```
+1. Stop current cell
+2. Try single secret code
+3. Verify linked service name
+4. If still stuck → it’s infra issue
 
 ---
 
-# 🚨 COMMON ISSUES
+If you tell me:
 
-### ❌ 401
+👉 What is your **Key Vault linked service name** (screenshot or text)
 
-→ Token issue (wrong / expired)
-
-### ❌ 404
-
-→ Wrong token_url
-
-### ❌ 415
-
-→ Wrong content type (already fixed in your case)
-
----
-
-# 🧾 WHAT YOU CAN TELL YOUR TEAM
-
-> I am now using Key Vault to fetch Apigee credentials and generating token via client_credentials flow. Proceeding with authenticated DataHub API call.
-
----
-
-# 👍 YOU ARE VERY CLOSE
-
-You’ve already solved:
-
-* Network ✅
-* Endpoint ✅
-* Upload logic ✅
-
-Now just:
-
-```text
-Token → Attach → Done
-```
-
----
-
-If anything fails, just paste:
-
-* Token API response
-* Upload response
-
-I’ll fix instantly 👍
+I’ll fix it in one go 👍
