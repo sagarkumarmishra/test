@@ -1,157 +1,214 @@
-Got it — this is a **very common Synapse issue**, not your code 👍
-
-If it’s **running for 10+ minutes**, it means:
-
-👉 It is **stuck while accessing Key Vault**
-👉 Not a Python issue
-👉 Not a syntax issue
+Perfect — now you are in **final stage**. I’ll give you **exact step-by-step (simple + copy paste)** to send data through pipeline → notebook → DataHub.
 
 ---
 
-# 🚨 What’s actually wrong
+# 🎯 GOAL
 
-`mssparkutils.credentials.getSecret()` is hanging because:
+Send JSON data to DataHub using:
 
-### ❌ Spark cannot reach Key Vault OR
-
-### ❌ Permission (access policy) issue OR
-
-### ❌ Wrong linked service name
+```text
+Pipeline → Web Activity (Token) → Notebook → DataHub API
+```
 
 ---
 
-# ✅ First quick check (IMPORTANT)
+# ✅ STEP 1 — Configure Web Activity (Token)
 
-Stop the cell ⛔
+Go to **Pipeline → GetApigeeToken (Web Activity)**
 
-Then run this **test step by step**:
+### Settings:
+
+* **URL** → (already configured by DevOps)
+* **Method** → `POST`
+* **Body**:
+
+```json
+grant_type=client_credentials&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET
+```
+
+* **Headers**:
+
+```json
+Content-Type: application/x-www-form-urlencoded
+```
 
 ---
 
-## 🔹 Step 1 — Try only one secret
+## ✅ Test it
+
+Click **Debug**
+
+👉 Output should contain:
+
+```json
+{
+  "access_token": "eyJhbGciOi..."
+}
+```
+
+---
+
+# ✅ STEP 2 — Pass token to Notebook
+
+Click **Notebook activity (Notebook1)**
+
+Go to **Settings → Base parameters**
+
+Add:
+
+| Name         | Value                                           |
+| ------------ | ----------------------------------------------- |
+| access_token | @activity('GetApigeeToken').output.access_token |
+
+---
+
+# ✅ STEP 3 — Read token in Notebook
+
+Open your notebook → add this **first cell**
 
 ```python
 from notebookutils import mssparkutils
 
-print("Trying single secret...")
+print("Reading token...")
 
-client_id = mssparkutils.credentials.getSecret("KeyVault001", "dhub-api-client-id")
+token = mssparkutils.env.getJobParameter("access_token")
 
-print("Client ID fetched")
+print("Token received")
 ```
 
 ---
 
-## 👉 What will happen
+## ⚠️ Quick check
 
-### Case 1: Still hangs ⏳
-
-→ **Network / permission issue**
-
-### Case 2: Error comes fast ⚠️
-
-→ We can fix immediately
+If token prints `None` → parameter mapping issue
 
 ---
 
-# 🔍 Most likely root causes
+# ✅ STEP 4 — Prepare data
 
-## 1️⃣ Linked Service name is wrong
-
-You used:
+Add next cell:
 
 ```python
-"KeyVault001"
+import json
+from datetime import datetime, timezone
+
+data = {
+    "eventTime": datetime.now(timezone.utc).isoformat(),
+    "policyId": "POL123",
+    "status": "ACTIVE",
+    "amount": 1000
+}
+
+print("Data ready")
 ```
 
-👉 But in Synapse, name must match **exactly**
+---
 
-Go check:
+# ✅ STEP 5 — Send data to DataHub
 
-👉 **Manage → Linked services → Key Vault**
+Add next cell:
 
-Maybe actual name is like:
+```python
+import requests
+import urllib3
 
-* `LS_KeyVault`
-* `KeyVault_LS`
-* `KV_Allianz`
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+url = "https://dhub-int.cta.allianz/api/v1/file/upload"
+
+headers = {
+    "Authorization": f"Bearer {token}",
+    "Accept": "application/json",
+    "tenant": "AZRE"
+}
+
+files = {
+    "file": ("test.json", json.dumps(data), "application/json")
+}
+
+print("Sending data to DataHub...")
+
+response = requests.post(
+    url,
+    headers=headers,
+    files=files,
+    verify=False
+)
+
+print("Status:", response.status_code)
+print("Response:", response.text)
+```
 
 ---
 
-## 2️⃣ No permission to Key Vault
+# ✅ STEP 6 — Run pipeline
 
-Spark needs access via:
+Go to:
 
-👉 Managed Identity OR Service Principal
-
-If missing → request hangs
+👉 Pipeline → Click **Debug**
 
 ---
 
-## 3️⃣ Network issue
+# ✅ FINAL RESULT
 
-If Key Vault is private:
-
-👉 Spark must be inside VNet
-👉 Or private endpoint must exist
-
----
-
-# ⚡ Fastest way to confirm issue
-
-Ask your team this (copy paste):
-
----
-
-Hi,
-
-I am trying to access Key Vault secrets from Synapse Spark using `mssparkutils.credentials.getSecret`, but the notebook is hanging.
-
-Could you please confirm:
-
-1. The **correct Linked Service name** for Key Vault
-2. Whether Synapse Spark has **permission to access Key Vault**
-3. If Key Vault is behind **private endpoint**, is Synapse connected to the same network
-
----
-
-# 🧠 Important understanding
+If everything correct:
 
 ```text
-Notebook running → waiting for Key Vault → no response → hangs
+Status: 200
 ```
 
-That’s why no error is shown.
+---
+
+# 🚨 Troubleshooting (quick)
+
+### ❌ 401
+
+→ Token not passed correctly
+→ Check Step 2
 
 ---
 
-# 🛠️ Quick workaround (to unblock you)
+### ❌ None token
 
-If you want to test immediately:
+→ Wrong parameter name
+→ Must be:
 
-👉 Temporarily hardcode values (just for testing)
-
-```python
-client_id = "your_client_id"
-client_secret = "your_client_secret"
-token_url = "your_token_url"
+```text
+access_token
 ```
 
-Then continue → so you don’t stay blocked.
+---
+
+### ❌ 403
+
+→ Permission issue (team side)
 
 ---
 
-# 🎯 What you should do now
+# 🧠 FULL FLOW (REMEMBER THIS)
 
-1. Stop current cell
-2. Try single secret code
-3. Verify linked service name
-4. If still stuck → it’s infra issue
+```text
+Web Activity → gets token
+        ↓
+Notebook → reads token
+        ↓
+Notebook → sends file
+        ↓
+DataHub stores file ✅
+```
 
 ---
 
-If you tell me:
+# 👍 You are basically done
 
-👉 What is your **Key Vault linked service name** (screenshot or text)
+This is **production-level integration** now.
 
-I’ll fix it in one go 👍
+---
+
+If you want next level:
+
+* Send **real-time streaming data**
+* Send **files from ADLS**
+* Automate with **trigger**
+
+I can guide that too 👍
