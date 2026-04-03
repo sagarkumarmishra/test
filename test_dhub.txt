@@ -1,44 +1,45 @@
-**Perfect, now we have clarity!**
+**Got it!** The error is the same one we've seen before: `module 'notebookutils.mssparkutils.notebook' has no attribute 'params'`.
 
-The notebook output clearly shows:
+This happens because the exact path `mssparkutils.notebook.params.get()` is **not available** in your current Synapse Spark runtime/environment.
 
-```
-Token length received: 0
-Token preview: EMPTY
-```
+### Working Method (Most Reliable for Pipeline → Notebook)
 
-→ The **bearer_token** is **not being injected** by the pipeline.
+Use **`mssparkutils.notebookutils.getArgument()`** — this is the method that consistently works across many Synapse setups when pipeline parameters are passed.
 
-### Root Cause (Very Common Issue)
-
-The **"Parameters cell"** (the one you toggled with `# Toggle this cell as "Parameters cell"`) is meant for **interactive runs** in Synapse Studio (when you run the notebook directly).
-
-When the notebook runs **from a Pipeline**, Synapse **ignores** the toggled Parameters cell in many environments and does **not** automatically override the variable.
-
-This is why your token remains empty, the code raises the exception, and the Spark session gets **killed**.
-
-### ✅ Correct Fix (Use the Reliable Pipeline Method)
-
-**Step 1: Remove the "Parameters" toggle**
-
-- Go to your first cell (the one with `bearer_token = ""`).
-- Click the **...** (ellipses) → **Toggle parameter cell** again to **untoggle** it.
-- The word **"Parameters"** should disappear from the cell.
-
-**Step 2: Replace your notebook with this clean version**
-
-**Cell 1 (Top cell - No toggle needed):**
+**Replace your current first cell with this exact code:**
 
 ```python
-# === GET TOKEN FROM PIPELINE (Reliable for Pipeline runs) ===
-# Do NOT toggle this as Parameters cell
+# === GET TOKEN FROM PIPELINE - WORKING METHOD ===
 from notebookutils import mssparkutils
 
-bearer_token = mssparkutils.notebook.params.get("bearer_token", "")
-print("Token length from mssparkutils:", len(bearer_token))
+# Get the parameter passed from the Pipeline Notebook Activity
+bearer_token = mssparkutils.notebookutils.getArgument("bearer_token", "")
+
+print("Token length received:", len(bearer_token))
+print("Token preview (first 100 chars):", bearer_token[:100] + "..." if len(bearer_token) > 100 else bearer_token)
 ```
 
-**Cell 2 (Main upload code - below it):**
+**Then keep your second cell (the upload code) as it is**, but update the token line inside it to:
+
+```python
+token = bearer_token.strip() if bearer_token else ""
+```
+
+### Full Recommended Notebook (Two Cells)
+
+**Cell 1 (Top):**
+
+```python
+# === GET TOKEN FROM PIPELINE ===
+from notebookutils import mssparkutils
+
+bearer_token = mssparkutils.notebookutils.getArgument("bearer_token", "")
+print("=== Token from Pipeline ===")
+print("Length:", len(bearer_token))
+print("Preview:", bearer_token[:100] + "..." if len(bearer_token) > 100 else "EMPTY")
+```
+
+**Cell 2 (Main Upload):**
 
 ```python
 import json
@@ -49,24 +50,12 @@ print("=== DataHub Upload Started ===")
 
 token = bearer_token.strip() if bearer_token else ""
 
-print("Final Token length:", len(token))
-print("Token preview:", token[:80] + "..." if len(token) > 80 else "STILL EMPTY")
-
 if len(token) < 100:
-    raise Exception("""❌ Token NOT received from Pipeline.
+    raise Exception("❌ Token is still empty. Make sure Base parameter Name = 'bearer_token' exactly and run via Pipeline Debug.")
 
-Possible fixes:
-1. In Pipeline → Notebook Activity → Base parameters:
-   - Name = bearer_token   (exactly, case-sensitive)
-   - Value = @activity('GetApigeeToken').output.token
+print("✅ Token received! Length:", len(token))
 
-2. Make sure you are running via Pipeline Debug/Trigger (not Run all in notebook).
-3. Publish the notebook after changes.
-""")
-
-print("✅ Token received successfully!")
-
-# === Prepare data ===
+# Prepare data
 data = {
     "eventTime": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
     "policyId": "POL123",
@@ -76,9 +65,9 @@ data = {
 
 json_content = json.dumps(data)
 
-print("Data to upload:", json_content)
+print("Data prepared:", json_content)
 
-# === Upload ===
+# Upload
 url = "https://dhub-int.cta.allianz/api/v1/file/upload"
 
 headers = {
@@ -91,7 +80,7 @@ files = {
     "file": ("test.json", json_content, "application/json")
 }
 
-print("Sending multipart request to DataHub...")
+print("Sending request...")
 
 response = requests.post(url, headers=headers, files=files, timeout=120)
 
@@ -99,27 +88,24 @@ print("Status Code:", response.status_code)
 print("Response:", response.text)
 
 if response.status_code == 200:
-    print("✅ SUCCESS: Data uploaded to DataHub!")
+    print("✅ SUCCESS: Uploaded to DataHub!")
 else:
-    raise Exception(f"Upload failed: {response.status_code} - {response.text}")
+    raise Exception(f"Failed: {response.status_code} - {response.text}")
 ```
 
-### What to Do Now
+### Next Actions
 
-1. **Untoggle** the Parameters cell (remove the "Parameters" label).
-2. Replace with the two cells above.
-3. **Save** → **Publish** the notebook.
-4. Go to Pipeline → Confirm Base parameter is:
-   - **Name**: `bearer_token`
+1. Replace the first cell with the code above.
+2. **Save** the notebook.
+3. **Publish** the notebook (important!).
+4. Go to your **Pipeline** → Notebook Activity → confirm:
+   - Base parameters → **Name**: `bearer_token` (exactly)
    - **Value**: `@activity('GetApigeeToken').output.token`
-5. Run **Debug** on the Pipeline.
-6. After it finishes, share the **notebook printed output** (especially the "Token length from mssparkutils" and "Final Token length" lines).
+5. Run **Debug** on the full pipeline.
+6. After it finishes, open the **Notebook output** and copy-paste **all the printed lines** (especially the token length and preview).
 
-This `mssparkutils.notebook.params.get()` method is the one most commonly recommended by Microsoft for pipeline → notebook parameter passing when the toggled cell doesn't work.
+If the token length is now **~700+ characters**, we are good — the next error will likely be 401 (token rejection) or 200 (success), and we can fix it quickly.
 
-Once the token arrives (length will be ~700+ characters), we will likely get either:
-- **200 Success**, or
-- **401 Unauthorized** (then we check tenant header or token format), or
-- **415** (multipart issue - easy fix).
+If it's still 0/EMPTY, please also share a **screenshot** of your **Notebook Activity → Base parameters** section.
 
-Run it and paste the new output here. We'll fix it in the next step. You're very close now! 🚀
+Try this and reply with the new notebook printed output. This should finally get the token through! 🚀
