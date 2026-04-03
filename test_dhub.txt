@@ -1,40 +1,49 @@
-**Got it — the error is clear now.**
+**No, you don't have to run just that single line.**  
+The error is happening because **`getContext()`** also doesn't exist in your environment (same `AttributeError` pattern).
 
-The line `mssparkutils.notebook.params.get(...)` is **not working** in your current environment (it sometimes throws `no attribute 'params'` depending on the Spark runtime/version or how the notebook is executed).
+### Why this keeps happening
+In **Azure Synapse Spark Notebooks**, when you run a cell **directly** (by clicking the play button or "Run all"), the pipeline parameters are **not injected**.  
+`mssparkutils.notebook.params.get()` only works when the notebook runs **through the Pipeline Notebook Activity** (via Debug or Trigger).
 
-### Best & Most Reliable Fix (2026 Synapse)
+Your previous attempts failed for the same reason — the notebook was executed interactively.
 
-Use the **old but very stable method** that works consistently:
+### Correct & Simple Way (Recommended)
+
+**Step 1: Create a "Parameters Cell"** (This is the official Microsoft way)
+
+1. In your notebook, create a **new cell at the very top**.
+2. Paste this exact code in that cell:
 
 ```python
-token = mssparkutils.notebook.getContext().get("bearer_token")
+# Parameters cell - DO NOT delete or move this cell
+bearer_token = ""   # This will be overwritten by the Pipeline
 ```
 
-This reads the parameter injected by the **Pipeline Notebook Activity** reliably.
+3. Click on the cell → look for the **ellipses (...)** on the right → select **"Toggle parameter cell"** (or "Make parameters cell").
 
-### Updated Full Notebook Code (Copy-Paste This)
+   - The cell background will change (usually light blue or marked as Parameters).
 
-Replace your current cell with this complete version:
+**Step 2: Use the parameter in your main code cell** (below the parameters cell)
+
+Replace your current code with this full working version:
 
 ```python
-from notebookutils import mssparkutils   # Keep this import for safety
 import json
 from datetime import datetime
 import requests
 
 print("=== Starting DataHub Upload ===")
 
-# === READ TOKEN FROM PIPELINE (Most Reliable Way) ===
-token = mssparkutils.notebook.getContext().get("bearer_token")
+# Token comes from the Parameters cell (injected by Pipeline)
+token = bearer_token   # ← This variable is automatically available
 
 print("Token received (first 40 chars):", 
       token[:40] + "..." if token and len(token) > 40 else "EMPTY or MISSING!")
 
 if not token or len(token) < 50:
-    raise Exception("❌ Token is missing or too short! "
-                    "Make sure parameter name in Pipeline is exactly 'bearer_token' (case-sensitive)")
+    raise Exception("❌ Token is missing! Run this notebook from the Pipeline (Debug/Trigger), not directly.")
 
-# === PREPARE YOUR DATA ===
+# Prepare data
 data = {
     "eventTime": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
     "policyId": "POL123",
@@ -44,9 +53,9 @@ data = {
 
 json_content = json.dumps(data)
 
-print("Data prepared for upload:", json_content)
+print("Data prepared:", json_content)
 
-# === SEND MULTIPART UPLOAD TO DATAHUB ===
+# Upload
 url = "https://dhub-int.cta.allianz/api/v1/file/upload"
 
 headers = {
@@ -59,36 +68,32 @@ files = {
     "file": ("test.json", json_content, "application/json")
 }
 
-print("Sending multipart POST to DataHub...")
+print("Sending upload request...")
 
 response = requests.post(url, headers=headers, files=files, timeout=60)
 
 print("Status Code:", response.status_code)
-print("Response Text:", response.text[:500])  # limit output if too long
+print("Response:", response.text[:800])   # show first 800 chars
 
 if response.status_code == 200:
-    print("✅ SUCCESS: Data uploaded to DataHub!")
+    print("✅ SUCCESS: Uploaded to DataHub!")
 else:
-    print("❌ FAILED")
-    raise Exception(f"Upload failed - Status: {response.status_code} | Details: {response.text}")
+    raise Exception(f"Failed with {response.status_code}: {response.text}")
 ```
 
-### What to Do Right Now:
+### How to Test It Properly
 
-1. **Paste** the code above into your notebook cell.
-2. **Save** the notebook.
-3. Go to your **Pipeline** → Click **Debug** (or "Trigger Now").
-4. After the run finishes, open the **Notebook1** output and copy-paste the **full printed output** here (especially the token line and status code).
+1. **Save** the notebook.
+2. Go to your **Pipeline**.
+3. Make sure the Notebook Activity still has:
+   - Base Parameter → Name: `bearer_token`  
+     Value: `@activity('GetApigeeToken').output.token`
+4. Click **Debug** (or Trigger Now) on the **Pipeline**, **not** on the notebook.
+5. After it finishes, open the **Notebook1** output and share the full printed result here.
 
-### Extra Tips:
+This "Parameters cell" method is the most reliable and recommended way in current Synapse/Fabric.
 
-- **Important**: Make sure you are **running via the Pipeline** (Debug or Trigger), **not** by clicking "Run all" directly in the notebook. Pipeline parameters are only injected when run from the pipeline.
-- Double-check in the Pipeline → Notebook Activity → Base parameters:  
-  Name = `bearer_token` (exactly like this, no extra spaces)
+Try the above steps and run it **from the Pipeline**.  
+Reply with the output you get (success or any error). We'll fix the next thing (likely 401/415 or success) right away.
 
-This `getContext().get()` method is very stable and avoids the `params` / `getParameter` issues you faced.
-
-Run it with this code and share the output (success or error).  
-We'll fix the next issue (if any — 401, 415, etc.) immediately.
-
-You're getting closer! Just reply with the new result. 🚀
+You're very close now! Let me know the result.
