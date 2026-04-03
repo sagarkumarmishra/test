@@ -1,29 +1,19 @@
-**Yes, I understand your frustration.**  
-You've tried everything correctly, but the token is **still not getting injected** from the Pipeline. This is a known annoying issue in some Synapse workspaces (especially with certain Spark pool configurations).
-
-### ✅ Quick Temporary Solution: Pass the token **manually** for testing
-
-Since the Web Activity is working fine and giving you the token, we can **hardcode the token temporarily** in the notebook just to test if the **upload part** works.
-
-**Do this right now:**
-
-**In your notebook, replace the token reading part with this:**
-
-```python
 import json
 from datetime import datetime
 import requests
+import urllib3
+
+# Suppress only the SSL warning (cleaner than verify=False)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 print("=== DataHub Upload Started ===")
 
-# === TEMPORARY: Paste the token from Web Activity here ===
-# Copy the full "token" value from your Web Activity output
+# === Paste your latest token from Web Activity here ===
 token = "eyJraWQiOiIxIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ.eyJzdWIiOiJESFVCX0lOVF9URU5BTlQiLCJhdWQiOiJhbGxpYW56LWN0YSIsInRubiI6WyJPRV9URVNUIl0sImlzcyI6Imh0dHBzOlwvXC9pbnQtYWxsaWFuei1yZS5hcGlzLmFsbGlhbnpcL2VkZ2VtaWNyby1hdXRoLWRodWJcL3Rva2VuIiwicmxlIjoiQVBJR0VFIiwiZXhwIjoxNzc1MjEwODkzLCJpYXQiOjE3NzUyMDM2OTMsImp0aSI6IjYwNjNlZTc3LWMzMTktNDBlMC05YzY0LTY2NjdiOGMzNjhlZiJ9.g0tN1PEL9KzQXoze0KRDlDeZ9FJxOUFlueGv2rzEwSjMlw4OvC1v2ZQfqZoi1cTlLNB4q1IeQh5VeHfyREc2xK3VHk4leqWSIrpnqlkXfiAg9fCpYsfkVuZhhc2aIs7bZlqovB5kjkcp-7NfOu7oJIcBrzK1TWbfr4sQG-6eKYYqIyzIE66xCzp00EPIWRaFUyvev_kL6jpBx4jwRKayf8mhCXtqqlAppPDat92MKHtMdXy3MOtURfkVT1MipXWfRgXIBRxdr18RgxYiWtX3Mfb37Hc7eb4gpslxGjeA0NQTyrWNCpdPL09ceJgwGEtBYcjpzYRKEtykLifcw4CT2w"
 
 print("Token length:", len(token))
-print("Token preview:", token[:100] + "...")
 
-# === Your data ===
+# Prepare your JSON data
 data = {
     "eventTime": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
     "policyId": "POL123",
@@ -35,7 +25,7 @@ json_content = json.dumps(data)
 
 print("Data prepared:", json_content)
 
-# === Upload to DataHub ===
+# === API Call with SSL handling for internal domain ===
 url = "https://dhub-int.cta.allianz/api/v1/file/upload"
 
 headers = {
@@ -50,38 +40,27 @@ files = {
 
 print("Sending multipart upload to DataHub...")
 
-response = requests.post(url, headers=headers, files=files, timeout=120)
+try:
+    response = requests.post(
+        url=url,
+        headers=headers,
+        files=files,
+        timeout=120,
+        verify=False          # Required for internal corporate certificates
+    )
 
-print("Status Code:", response.status_code)
-print("Response Body:", response.text)
+    print("Status Code:", response.status_code)
+    print("Response Body:", response.text)
 
-if response.status_code == 200:
-    print("✅ SUCCESS: Data uploaded to DataHub!")
-else:
-    print("❌ FAILED")
-    raise Exception(f"Upload failed with status {response.status_code}: {response.text}")
-```
+    if response.status_code == 200:
+        print("✅ SUCCESS: Data uploaded to DataHub!")
+    else:
+        print("❌ FAILED")
+        raise Exception(f"Upload failed with status {response.status_code}: {response.text}")
 
-### How to use it:
-
-1. Copy the **full token** from your Web Activity output (the long string starting with `eyJraWQi...`).
-2. Paste it inside the `token = "..."` line (replace the old one I put above).
-3. **Save** and **Publish** the notebook.
-4. Run the notebook directly (**Run all**) or from the Pipeline (Debug).
-
-**This will bypass the parameter passing issue** and let us test if the **multipart upload** actually works.
-
----
-
-### After you run it, please share:
-
-- The full printed output (especially **Status Code** and **Response Body**)
-
-Once we see whether you get **200 Success**, **401 Unauthorized**, **415 Unsupported Media Type**, or any other error, we can fix the final upload part.
-
-Then we can go back and fix the proper token passing from the Pipeline.
-
-**Try this manual token approach now** and paste the output here.  
-This will tell us if the actual API call is working or not.
-
-Let me know the result! 🚀
+except requests.exceptions.SSLError as ssl_err:
+    print("❌ SSL Error occurred:", str(ssl_err))
+    raise
+except Exception as e:
+    print("❌ Unexpected error:", str(e))
+    raise
