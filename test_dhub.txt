@@ -1,45 +1,32 @@
-**Got it!** The error is the same one we've seen before: `module 'notebookutils.mssparkutils.notebook' has no attribute 'params'`.
+**I see the pattern — the token is still not reaching the notebook.**
 
-This happens because the exact path `mssparkutils.notebook.params.get()` is **not available** in your current Synapse Spark runtime/environment.
+This is a **very common** issue in Azure Synapse. The **Parameters cell + toggle** method is the official way, but sometimes it doesn't inject properly if:
+- The cell is not the **very first** cell
+- The toggle is not applied correctly
+- The notebook wasn't **Published** after changes
+- The **Base parameter Name** in the Pipeline has a small typo (space, capital letter, etc.)
 
-### Working Method (Most Reliable for Pipeline → Notebook)
+### Let's do a **clean reset** and try again (step-by-step)
 
-Use **`mssparkutils.notebookutils.getArgument()`** — this is the method that consistently works across many Synapse setups when pipeline parameters are passed.
+**1. Clean your notebook completely**
 
-**Replace your current first cell with this exact code:**
+- Delete **all cells** in your notebook (or create a new notebook to avoid old issues).
+- Add **exactly these two cells**:
 
-```python
-# === GET TOKEN FROM PIPELINE - WORKING METHOD ===
-from notebookutils import mssparkutils
-
-# Get the parameter passed from the Pipeline Notebook Activity
-bearer_token = mssparkutils.notebookutils.getArgument("bearer_token", "")
-
-print("Token length received:", len(bearer_token))
-print("Token preview (first 100 chars):", bearer_token[:100] + "..." if len(bearer_token) > 100 else bearer_token)
-```
-
-**Then keep your second cell (the upload code) as it is**, but update the token line inside it to:
+**Cell 1 (Must be the top-most cell):**
 
 ```python
-token = bearer_token.strip() if bearer_token else ""
+# === PARAMETERS CELL - DO NOT MOVE THIS CELL ===
+# Click the ... on this cell → "Toggle parameter cell"
+# You MUST see the word "Parameters" on this cell after toggling
+
+bearer_token = ""   # Pipeline will replace this empty string with the real token
 ```
 
-### Full Recommended Notebook (Two Cells)
+- After pasting, click the **...** (ellipses) on the right of this cell → select **"Toggle parameter cell"**.
+- Confirm the cell now shows **"Parameters"** label.
 
-**Cell 1 (Top):**
-
-```python
-# === GET TOKEN FROM PIPELINE ===
-from notebookutils import mssparkutils
-
-bearer_token = mssparkutils.notebookutils.getArgument("bearer_token", "")
-print("=== Token from Pipeline ===")
-print("Length:", len(bearer_token))
-print("Preview:", bearer_token[:100] + "..." if len(bearer_token) > 100 else "EMPTY")
-```
-
-**Cell 2 (Main Upload):**
+**Cell 2 (Right below it):**
 
 ```python
 import json
@@ -48,14 +35,18 @@ import requests
 
 print("=== DataHub Upload Started ===")
 
+# Token injected by Pipeline
 token = bearer_token.strip() if bearer_token else ""
 
+print("Token length:", len(token))
+print("Token preview (first 120 chars):", token[:120] + "..." if len(token) > 120 else "EMPTY")
+
 if len(token) < 100:
-    raise Exception("❌ Token is still empty. Make sure Base parameter Name = 'bearer_token' exactly and run via Pipeline Debug.")
+    raise Exception("Token is EMPTY. Please check the 5 points below.")
 
-print("✅ Token received! Length:", len(token))
+print("✅ Token received! Proceeding with upload...")
 
-# Prepare data
+# Your data
 data = {
     "eventTime": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
     "policyId": "POL123",
@@ -64,8 +55,6 @@ data = {
 }
 
 json_content = json.dumps(data)
-
-print("Data prepared:", json_content)
 
 # Upload
 url = "https://dhub-int.cta.allianz/api/v1/file/upload"
@@ -80,7 +69,7 @@ files = {
     "file": ("test.json", json_content, "application/json")
 }
 
-print("Sending request...")
+print("Sending request to DataHub...")
 
 response = requests.post(url, headers=headers, files=files, timeout=120)
 
@@ -88,24 +77,41 @@ print("Status Code:", response.status_code)
 print("Response:", response.text)
 
 if response.status_code == 200:
-    print("✅ SUCCESS: Uploaded to DataHub!")
+    print("✅ SUCCESS: Data uploaded to DataHub!")
 else:
-    raise Exception(f"Failed: {response.status_code} - {response.text}")
+    print("❌ FAILED")
+    raise Exception(f"Status {response.status_code}: {response.text}")
 ```
 
-### Next Actions
+**2. Save + Publish**
 
-1. Replace the first cell with the code above.
-2. **Save** the notebook.
-3. **Publish** the notebook (important!).
-4. Go to your **Pipeline** → Notebook Activity → confirm:
-   - Base parameters → **Name**: `bearer_token` (exactly)
-   - **Value**: `@activity('GetApigeeToken').output.token`
-5. Run **Debug** on the full pipeline.
-6. After it finishes, open the **Notebook output** and copy-paste **all the printed lines** (especially the token length and preview).
+- Click **Save**
+- Click **Publish all** (or Publish)
 
-If the token length is now **~700+ characters**, we are good — the next error will likely be 401 (token rejection) or 200 (success), and we can fix it quickly.
+**3. Check Pipeline Notebook Activity (Very Important)**
 
-If it's still 0/EMPTY, please also share a **screenshot** of your **Notebook Activity → Base parameters** section.
+Go to your Pipeline → click on **Notebook1** activity → **Settings** tab → **Base parameters**
 
-Try this and reply with the new notebook printed output. This should finally get the token through! 🚀
+Make sure it looks **exactly** like this:
+- **Name**: `bearer_token`   (lowercase `b`, no extra spaces, no quotes)
+- **Type**: String
+- **Value**: `@activity('GetApigeeToken').output.token`
+
+**4. Run the Pipeline**
+
+- Click **Debug** on the Pipeline (not "Run all" in the notebook).
+- Wait for it to finish.
+- Open the **Notebook output** and copy-paste **everything that is printed** (especially "Token length" and "Token preview").
+
+### If token is still EMPTY after this
+
+Please reply with:
+1. The full notebook printed output
+2. Screenshot of the **Base parameters** section in the Notebook Activity (Name + Value visible)
+3. Confirm that the first cell shows the **"Parameters"** label
+
+We will then try an alternative approach (using a different injection method or even moving the token fetch inside the notebook using Key Vault if allowed).
+
+The Web Activity token is perfect — we just need the hand-off to the notebook to work.
+
+Go ahead and set it up as above, then share the new output. We'll get it working.
