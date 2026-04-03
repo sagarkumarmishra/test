@@ -1,75 +1,51 @@
-Got it — here is the **clean, exact step-by-step (no confusion)** to make everything work 👇
+Got it — here is the **final clean step-by-step (based on your exact setup)**. Just follow line by line 👇
 
 ---
 
-# 🎯 GOAL
+# 🎯 YOUR SETUP (CONFIRMED)
 
-Send data to DataHub using:
-
-```text
-Pipeline → Get Token → Pass Token → Notebook → Upload Data
-```
-
----
-
-# ✅ STEP 1 — Fix Web Activity (Token)
-
-Go to:
-
-👉 **Pipeline → GetApigeeToken (Web Activity)**
-
-### Check these:
-
-* Method = **POST**
-* Headers:
-
-```text
-Content-Type : application/x-www-form-urlencoded
-```
-
-* Body:
-
-```text
-grant_type=client_credentials&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET
-```
-
----
-
-## ▶️ Run Debug once
-
-👉 Go to **Output tab**
-
-You should see:
+Your Web Activity returns:
 
 ```json
 {
-  "body": {
-    "access_token": "eyJhbGciOi..."
-  }
+  "token": "xxxxx",
+  "token_type": "Bearer"
 }
+```
+
+👉 So correct path is:
+
+```text
+.output.token
 ```
 
 ---
 
-# ✅ STEP 2 — Pass token to Notebook
+# ✅ STEP 1 — Fix Pipeline Parameter
 
 Go to:
 
-👉 **Notebook activity → Settings → Base parameters**
+👉 **Pipeline → Notebook activity → Settings → Base parameters**
 
-### ❗ Delete old one (`bearer_token`)
+### ❗ Remove old param (`bearer_token`)
 
 ### ➕ Add NEW:
 
-| Name         | Value                                                |
-| ------------ | ---------------------------------------------------- |
-| access_token | @activity('GetApigeeToken').output.body.access_token |
+| Name         | Value                                    |
+| ------------ | ---------------------------------------- |
+| access_token | @activity('GetApigeeToken').output.token |
+
+---
+
+# ✅ STEP 2 — Save pipeline
+
+Click **Publish / Save**
 
 ---
 
 # ✅ STEP 3 — Read token in Notebook
 
-Open your notebook → add this **FIRST CELL**
+Open notebook → add this **FIRST CELL**
 
 ```python
 from notebookutils import mssparkutils
@@ -83,11 +59,11 @@ print("Token received:", token[:20])
 
 ---
 
-## ▶️ Test
+# ▶️ STEP 4 — Test token only
 
-Run pipeline
+Run pipeline → **Debug**
 
-Expected:
+### Expected:
 
 ```text
 Reading token...
@@ -96,7 +72,13 @@ Token received: eyJhbGciOi...
 
 ---
 
-# ✅ STEP 4 — Prepare data
+## ❗ If token is None
+
+→ parameter name mismatch → recheck Step 1
+
+---
+
+# ✅ STEP 5 — Prepare data
 
 Add next cell:
 
@@ -116,7 +98,7 @@ print("Data ready")
 
 ---
 
-# ✅ STEP 5 — Send data to DataHub
+# ✅ STEP 6 — Send to DataHub
 
 Add next cell:
 
@@ -153,9 +135,9 @@ print("Response:", response.text)
 
 ---
 
-# ✅ STEP 6 — Run Pipeline
+# ▶️ STEP 7 — Run full pipeline
 
-👉 Click **Debug**
+Click **Debug**
 
 ---
 
@@ -167,52 +149,47 @@ Status: 200
 
 ---
 
-# 🚨 If something fails
-
-### ❌ Token is None
-
-→ Wrong parameter mapping → check Step 2
-
----
+# 🚨 If error comes
 
 ### ❌ 401
 
-→ Token not passed properly
-
----
+→ Token not passed correctly
 
 ### ❌ 403
 
 → Access issue (team side)
+
+### ❌ 415
+
+→ Content-type issue (already solved before)
 
 ---
 
 # 🧠 FINAL FLOW (REMEMBER)
 
 ```text
-Web Activity → gets token
+Web Activity → token
         ↓
-Pipeline → passes token
+Pipeline → pass token
         ↓
-Notebook → reads token
+Notebook → read token
         ↓
-Notebook → sends file
+Notebook → send file
         ↓
 DataHub success ✅
 ```
 
 ---
 
-# 👍 You’re basically done
+# 👍 You are DONE after this
 
-This is **real production setup**.
+This is exactly how **real enterprise pipelines work**.
 
 ---
 
-If you want next:
+If anything fails, just send:
 
-👉 Send real-time data
-👉 Read from ADLS and push
-👉 Schedule pipeline
+* Notebook output
+* Pipeline output
 
-I can guide that too 👍
+I’ll fix instantly 👍
