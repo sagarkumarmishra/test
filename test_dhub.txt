@@ -1,49 +1,57 @@
-**No, you don't have to run just that single line.**  
-The error is happening because **`getContext()`** also doesn't exist in your environment (same `AttributeError` pattern).
+**Yes, I understand** — you already tried the **Parameters cell** method before, and the token was still not getting filled (it stayed empty).
 
-### Why this keeps happening
-In **Azure Synapse Spark Notebooks**, when you run a cell **directly** (by clicking the play button or "Run all"), the pipeline parameters are **not injected**.  
-`mssparkutils.notebook.params.get()` only works when the notebook runs **through the Pipeline Notebook Activity** (via Debug or Trigger).
+This is a **very common frustration** in Synapse. The reason it didn't work earlier is usually one (or more) of these small things:
 
-Your previous attempts failed for the same reason — the notebook was executed interactively.
+### Why the token is not injected automatically
 
-### Correct & Simple Way (Recommended)
+The pipeline **only** injects the token when:
+- There is a **Parameters cell** at the **top** of the notebook.
+- That cell is **correctly toggled** as "Parameters cell" (you see the "Parameters" label).
+- The variable name in the cell (`bearer_token = ""`) **exactly** matches the **Name** you set in the Pipeline's Notebook Activity (case-sensitive: `bearer_token`).
+- You run the notebook **only from the Pipeline** (Debug or Trigger), **not** by clicking Run all in the notebook itself.
 
-**Step 1: Create a "Parameters Cell"** (This is the official Microsoft way)
+If any of these is slightly off, the token remains empty → your code raises an error → Spark session gets **killed** (that's why your pipeline showed "Succeeded" but the notebook state was "killed/cancelled").
 
-1. In your notebook, create a **new cell at the very top**.
-2. Paste this exact code in that cell:
+### Let's fix it cleanly right now (Most Reliable Method)
+
+**Step 1: Parameters Cell (Top-most cell)**
+
+Create/replace the **very first cell** with exactly this:
 
 ```python
-# Parameters cell - DO NOT delete or move this cell
-bearer_token = ""   # This will be overwritten by the Pipeline
+# === PARAMETERS CELL - DO NOT DELETE OR MOVE ===
+bearer_token = ""   # Pipeline will overwrite this with real Apigee token
 ```
 
-3. Click on the cell → look for the **ellipses (...)** on the right → select **"Toggle parameter cell"** (or "Make parameters cell").
+- Click the **...** on the right of this cell.
+- Choose **"Toggle parameter cell"**.
+- Confirm you see **"Parameters"** label on the cell.
 
-   - The cell background will change (usually light blue or marked as Parameters).
-
-**Step 2: Use the parameter in your main code cell** (below the parameters cell)
-
-Replace your current code with this full working version:
+**Step 2: Main Code Cell (Put this in the second cell)**
 
 ```python
 import json
 from datetime import datetime
 import requests
 
-print("=== Starting DataHub Upload ===")
+print("=== DataHub Upload Started ===")
 
-# Token comes from the Parameters cell (injected by Pipeline)
-token = bearer_token   # ← This variable is automatically available
+# Get token injected by Pipeline
+token = bearer_token.strip() if bearer_token else ""
 
-print("Token received (first 40 chars):", 
-      token[:40] + "..." if token and len(token) > 40 else "EMPTY or MISSING!")
+print("Token length:", len(token))
+print("Token preview:", token[:60] + "..." if len(token) > 60 else token)
 
-if not token or len(token) < 50:
-    raise Exception("❌ Token is missing! Run this notebook from the Pipeline (Debug/Trigger), not directly.")
+if len(token) < 100:
+    raise Exception("""❌ Token is empty!
+1. Confirm Pipeline Notebook Activity has Base Parameter:
+   Name = bearer_token   (exactly this spelling)
+   Value = @activity('GetApigeeToken').output.token
+2. You toggled the first cell as 'Parameters cell'
+3. You are running via Pipeline Debug/Trigger (not direct Run all)
+""")
 
-# Prepare data
+# === Prepare data ===
 data = {
     "eventTime": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
     "policyId": "POL123",
@@ -53,9 +61,9 @@ data = {
 
 json_content = json.dumps(data)
 
-print("Data prepared:", json_content)
+print("Data being uploaded:", json_content)
 
-# Upload
+# === Upload ===
 url = "https://dhub-int.cta.allianz/api/v1/file/upload"
 
 headers = {
@@ -68,32 +76,33 @@ files = {
     "file": ("test.json", json_content, "application/json")
 }
 
-print("Sending upload request...")
+print("Sending multipart request...")
 
-response = requests.post(url, headers=headers, files=files, timeout=60)
+response = requests.post(url, headers=headers, files=files, timeout=120)
 
 print("Status Code:", response.status_code)
-print("Response:", response.text[:800])   # show first 800 chars
+print("Full Response:", response.text)
 
 if response.status_code == 200:
-    print("✅ SUCCESS: Uploaded to DataHub!")
+    print("✅ SUCCESS: File uploaded to DataHub!")
 else:
-    raise Exception(f"Failed with {response.status_code}: {response.text}")
+    raise Exception(f"Upload failed with {response.status_code}: {response.text}")
 ```
 
-### How to Test It Properly
+### Immediate Next Action
 
-1. **Save** the notebook.
-2. Go to your **Pipeline**.
-3. Make sure the Notebook Activity still has:
-   - Base Parameter → Name: `bearer_token`  
-     Value: `@activity('GetApigeeToken').output.token`
-4. Click **Debug** (or Trigger Now) on the **Pipeline**, **not** on the notebook.
-5. After it finishes, open the **Notebook1** output and share the full printed result here.
+1. Make the above two cells exactly as shown.
+2. **Save** the notebook.
+3. Go to **Pipeline** → Double-check the Base Parameter name is **exactly** `bearer_token`.
+4. Click **Debug** on the Pipeline.
+5. After it finishes, open the **Notebook output** and **copy-paste the full printed text** here (especially the "Token length" and any error).
 
-This "Parameters cell" method is the most reliable and recommended way in current Synapse/Fabric.
+This method (Parameters cell) is the **official Microsoft-recommended** way and works in most environments.
 
-Try the above steps and run it **from the Pipeline**.  
-Reply with the output you get (success or any error). We'll fix the next thing (likely 401/415 or success) right away.
+If the token is **still empty** after this, please also share:
+- Screenshot of your **Notebook Activity Settings** (Base parameters section)
+- Screenshot of your notebook showing the Parameters cell (with the toggle applied)
 
-You're very close now! Let me know the result.
+We'll solve it together. Many people face this exact issue, and once the parameter injection works, the upload usually succeeds or gives a clear 401/415 error we can fix quickly.
+
+Go ahead and try the above. Reply with the new output.
