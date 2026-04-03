@@ -1,51 +1,32 @@
-**Got it!** Thanks for sharing the screenshot and your notebook code.
+**Got the exact error!**  
 
-### Problem I see immediately:
-
-You are **passing** the token with name **`bearer_token`** in the Pipeline:
-
-> Value = `@activity('GetApigeeToken').output.token`
-
-But in your **Notebook**, you are trying to **read** it with name **`access_token`**:
+The issue is here:
 
 ```python
-token = mssparkutils.notebook.getParameter("access_token")
+token = mssparkutils.notebook.getParameter("bearer_token")
 ```
 
-This is a **name mismatch** — that's why it's probably failing or giving empty value.
+**`getParameter`** does **not** exist. That's why you're getting:  
+**`AttributeError: module 'notebookutils.mssparkutils.notebook' has no attribute 'getParameter'`**
 
----
+### ✅ Correct Way to Read Parameters in Synapse Notebook (2026)
 
-### ✅ Correct Fix (Do this now)
-
-#### Option 1: Recommended (Change Notebook - easier)
-
-Update your notebook code to match the parameter name you are actually passing:
+When you pass parameters from **Pipeline → Notebook Activity** (Base Parameters), use this:
 
 ```python
 from notebookutils import mssparkutils
 
-print("Reading token...")
-token = mssparkutils.notebook.getParameter("bearer_token")   # ← Changed here
-
-print("Token received (first 30 chars):", token[:30] + "..." if token else "EMPTY!")
-
-if not token:
-    raise Exception("Token is empty or not received from Pipeline!")
+# Correct syntax
+token = mssparkutils.notebook.params.get("bearer_token")
 ```
 
-#### Option 2: Change Pipeline (if you prefer)
+**Note:**  
+- Use `.params.get("name")` → not `getParameter`  
+- The `mssparkutils` is already available by default in Synapse Spark notebooks (you don't always need the import, but it's safe to keep it).
 
-In the **Notebook Activity Settings** → Base parameters:
-- Change the **Name** from `bearer_token` to `access_token`
+### Fixed & Improved Notebook Code (Copy-Paste This)
 
-Either way is fine. I recommend **Option 1** (change notebook) because your screenshot already has `bearer_token`.
-
----
-
-### Full Updated Notebook Code (Copy-Paste Ready)
-
-Replace everything with this improved version:
+Replace your current cell with this full version:
 
 ```python
 from notebookutils import mssparkutils
@@ -55,15 +36,15 @@ import requests
 
 print("=== Starting DataHub Upload ===")
 
-# Read token from Pipeline (fixed name)
-token = mssparkutils.notebook.getParameter("bearer_token")
+# === READ TOKEN FROM PIPELINE (CORRECT WAY) ===
+token = mssparkutils.notebook.params.get("bearer_token")
 
-print("Token received (first 30 chars):", token[:30] + "..." if token else "EMPTY!")
+print("Token received (first 40 chars):", token[:40] + "..." if token else "EMPTY or MISSING!")
 
 if not token or len(token) < 50:
-    raise Exception("Token is missing or too short! Check Pipeline parameter name.")
+    raise Exception("❌ Token is missing! Check that the parameter name in Pipeline is exactly 'bearer_token'")
 
-# Prepare your data
+# === PREPARE YOUR DATA ===
 data = {
     "eventTime": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
     "policyId": "POL123",
@@ -71,11 +52,11 @@ data = {
     "amount": 1000
 }
 
-json_content = json.dumps(data, ensure_ascii=False)
+json_content = json.dumps(data)
 
-print("Data prepared:", json_content)
+print("Data to upload:", json_content)
 
-# Upload to DataHub
+# === UPLOAD TO DATAHUB ===
 url = "https://dhub-int.cta.allianz/api/v1/file/upload"
 
 headers = {
@@ -88,40 +69,38 @@ files = {
     "file": ("test.json", json_content, "application/json")
 }
 
-print("Sending multipart upload...")
+print("Sending request to DataHub...")
 
 response = requests.post(url, headers=headers, files=files, timeout=60)
 
 print("Status Code:", response.status_code)
-print("Response:", response.text)
+print("Response Text:", response.text)
 
 if response.status_code == 200:
-    print("✅ SUCCESS: File uploaded to DataHub!")
+    print("✅ SUCCESS: Data uploaded to DataHub!")
 else:
     print("❌ FAILED")
-    raise Exception(f"Upload failed with status {response.status_code}: {response.text}")
+    raise Exception(f"Upload failed - Status: {response.status_code} | Details: {response.text}")
 ```
 
----
+### What to Do Now:
 
-### Next Steps for You:
-
-1. Replace the notebook code with the one above.
+1. **Replace** your notebook cell with the code above.
 2. **Save** the notebook.
-3. Go back to Pipeline → Click **Debug** (or trigger it).
-4. After it runs, open the **Notebook1** output and copy-paste what you see (especially the prints).
+3. Go back to your **Pipeline** → Click **Debug** (or Trigger Now).
+4. After it finishes, open the **Notebook1** output and copy-paste everything that prints here.
 
-Tell me:
-- What status code you get?
-- What is printed for the response?
+### Most Likely Outcomes After This Fix:
+- **Success (200)** → Great! Your end-to-end flow is working.
+- **401 Unauthorized** → Token is being passed but Apigee is rejecting it (we can debug the token or tenant header).
+- **415 Unsupported Media Type** → Multipart format issue (unlikely with this code).
+- Still error on token → Double-check the parameter **name** in Pipeline is exactly **`bearer_token`** (case-sensitive).
 
-Most likely issues now:
-- Token name mismatch (we just fixed)
-- 401 → token not accepted (rare now)
-- 415 → multipart wrong (should be fixed with this code)
+**Quick Tip:**  
+You can also run the notebook directly from the pipeline (not just Debug) to make sure parameters are injected properly.
 
-Run it and share the output. I’ll tell you exactly what to do next.
+Run it with the corrected code and share the full output (especially the token print and status code).  
 
-You’re very close! Just one small name fix. Go ahead and try. 🚀
+I'm right here — we'll get the upload working in the next step! 🚀
 
-Any error — paste it here.
+Just reply with the new output.
