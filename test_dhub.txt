@@ -1,113 +1,81 @@
-Got it — here is the **final clean step-by-step (based on your exact setup)**. Just follow line by line 👇
+**Got it!** Thanks for sharing the screenshot and your notebook code.
 
----
+### Problem I see immediately:
 
-# 🎯 YOUR SETUP (CONFIRMED)
+You are **passing** the token with name **`bearer_token`** in the Pipeline:
 
-Your Web Activity returns:
+> Value = `@activity('GetApigeeToken').output.token`
 
-```json
-{
-  "token": "xxxxx",
-  "token_type": "Bearer"
-}
+But in your **Notebook**, you are trying to **read** it with name **`access_token`**:
+
+```python
+token = mssparkutils.notebook.getParameter("access_token")
 ```
 
-👉 So correct path is:
-
-```text
-.output.token
-```
+This is a **name mismatch** — that's why it's probably failing or giving empty value.
 
 ---
 
-# ✅ STEP 1 — Fix Pipeline Parameter
+### ✅ Correct Fix (Do this now)
 
-Go to:
+#### Option 1: Recommended (Change Notebook - easier)
 
-👉 **Pipeline → Notebook activity → Settings → Base parameters**
-
-### ❗ Remove old param (`bearer_token`)
-
-### ➕ Add NEW:
-
-| Name         | Value                                    |
-| ------------ | ---------------------------------------- |
-| access_token | @activity('GetApigeeToken').output.token |
-
----
-
-# ✅ STEP 2 — Save pipeline
-
-Click **Publish / Save**
-
----
-
-# ✅ STEP 3 — Read token in Notebook
-
-Open notebook → add this **FIRST CELL**
+Update your notebook code to match the parameter name you are actually passing:
 
 ```python
 from notebookutils import mssparkutils
 
 print("Reading token...")
+token = mssparkutils.notebook.getParameter("bearer_token")   # ← Changed here
 
-token = mssparkutils.notebook.getParameter("access_token")
+print("Token received (first 30 chars):", token[:30] + "..." if token else "EMPTY!")
 
-print("Token received:", token[:20])
+if not token:
+    raise Exception("Token is empty or not received from Pipeline!")
 ```
 
----
+#### Option 2: Change Pipeline (if you prefer)
 
-# ▶️ STEP 4 — Test token only
+In the **Notebook Activity Settings** → Base parameters:
+- Change the **Name** from `bearer_token` to `access_token`
 
-Run pipeline → **Debug**
-
-### Expected:
-
-```text
-Reading token...
-Token received: eyJhbGciOi...
-```
+Either way is fine. I recommend **Option 1** (change notebook) because your screenshot already has `bearer_token`.
 
 ---
 
-## ❗ If token is None
+### Full Updated Notebook Code (Copy-Paste Ready)
 
-→ parameter name mismatch → recheck Step 1
-
----
-
-# ✅ STEP 5 — Prepare data
-
-Add next cell:
+Replace everything with this improved version:
 
 ```python
+from notebookutils import mssparkutils
 import json
-from datetime import datetime, timezone
+from datetime import datetime
+import requests
 
+print("=== Starting DataHub Upload ===")
+
+# Read token from Pipeline (fixed name)
+token = mssparkutils.notebook.getParameter("bearer_token")
+
+print("Token received (first 30 chars):", token[:30] + "..." if token else "EMPTY!")
+
+if not token or len(token) < 50:
+    raise Exception("Token is missing or too short! Check Pipeline parameter name.")
+
+# Prepare your data
 data = {
-    "eventTime": datetime.now(timezone.utc).isoformat(),
+    "eventTime": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
     "policyId": "POL123",
     "status": "ACTIVE",
     "amount": 1000
 }
 
-print("Data ready")
-```
+json_content = json.dumps(data, ensure_ascii=False)
 
----
+print("Data prepared:", json_content)
 
-# ✅ STEP 6 — Send to DataHub
-
-Add next cell:
-
-```python
-import requests
-import urllib3
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
+# Upload to DataHub
 url = "https://dhub-int.cta.allianz/api/v1/file/upload"
 
 headers = {
@@ -117,79 +85,43 @@ headers = {
 }
 
 files = {
-    "file": ("test.json", json.dumps(data), "application/json")
+    "file": ("test.json", json_content, "application/json")
 }
 
-print("Sending data...")
+print("Sending multipart upload...")
 
-response = requests.post(
-    url,
-    headers=headers,
-    files=files,
-    verify=False
-)
+response = requests.post(url, headers=headers, files=files, timeout=60)
 
-print("Status:", response.status_code)
+print("Status Code:", response.status_code)
 print("Response:", response.text)
+
+if response.status_code == 200:
+    print("✅ SUCCESS: File uploaded to DataHub!")
+else:
+    print("❌ FAILED")
+    raise Exception(f"Upload failed with status {response.status_code}: {response.text}")
 ```
 
 ---
 
-# ▶️ STEP 7 — Run full pipeline
+### Next Steps for You:
 
-Click **Debug**
+1. Replace the notebook code with the one above.
+2. **Save** the notebook.
+3. Go back to Pipeline → Click **Debug** (or trigger it).
+4. After it runs, open the **Notebook1** output and copy-paste what you see (especially the prints).
 
----
+Tell me:
+- What status code you get?
+- What is printed for the response?
 
-# ✅ FINAL SUCCESS
+Most likely issues now:
+- Token name mismatch (we just fixed)
+- 401 → token not accepted (rare now)
+- 415 → multipart wrong (should be fixed with this code)
 
-```text
-Status: 200
-```
+Run it and share the output. I’ll tell you exactly what to do next.
 
----
+You’re very close! Just one small name fix. Go ahead and try. 🚀
 
-# 🚨 If error comes
-
-### ❌ 401
-
-→ Token not passed correctly
-
-### ❌ 403
-
-→ Access issue (team side)
-
-### ❌ 415
-
-→ Content-type issue (already solved before)
-
----
-
-# 🧠 FINAL FLOW (REMEMBER)
-
-```text
-Web Activity → token
-        ↓
-Pipeline → pass token
-        ↓
-Notebook → read token
-        ↓
-Notebook → send file
-        ↓
-DataHub success ✅
-```
-
----
-
-# 👍 You are DONE after this
-
-This is exactly how **real enterprise pipelines work**.
-
----
-
-If anything fails, just send:
-
-* Notebook output
-* Pipeline output
-
-I’ll fix instantly 👍
+Any error — paste it here.
