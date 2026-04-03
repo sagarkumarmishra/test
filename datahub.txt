@@ -1,0 +1,139 @@
+ {
+	"status": {
+		"Status": "Succeeded",
+		"ExecutionStatusCode": null,
+		"ExecutionStateMappings": null,
+		"Output": {
+			"status": {
+				"id": "602",
+				"poolId": null,
+				"sessionAcquiredFromPool": null,
+				"clusterAcquiredFromPool": null,
+				"name": "ADP_Datahub_Test_Int_spazcta000101_1775202038",
+				"sparkPoolName": "spazcta000101",
+				"workspaceName": "synw-cta-0001-tst-cr",
+				"appId": "application_1775202169344_0001",
+				"submitterId": "2864980c-2195-47d6-bc42-d8b4ff8e3e11",
+				"errorInfo": [],
+				"owner": null,
+				"proxyUser": null,
+				"kind": "spark",
+				"isNewLivySession": false,
+				"log": [
+					"\t queue: default",
+					"\t start time: 1775202307858",
+					"\t final status: UNDEFINED",
+					"\t tracking URL:  http://vm-47253501:8088/proxy/application_1775202169344_0001/ ",
+					"\t user: trusted-service-user",
+					"26/04/03 07:45:08 INFO ShutdownHookManager: Shutdown hook called",
+					"26/04/03 07:45:08 INFO ShutdownHookManager: Deleting directory /mnt/tmp/spark-ddb65184-f659-49f5-9830-f01a97056b3c",
+					"26/04/03 07:45:08 INFO ShutdownHookManager: Deleting directory /mnt/tmp/spark-64f8b106-0678-45cb-9e22-21a8f4b53ecd",
+					"\nstderr: ",
+					"\nYARN Diagnostics: "
+				],
+				"state": "killed",
+				"result": "cancelled",
+				"appInfo": {
+					"sparkUiUrl": " https://web.azuresynapse.net/sparkui/6e06e42d-6925-47c6-b9e7-9581c7ca302a/workspaces/synw-cta-0001-tst-cr/sparkpools/spazcta000101/sessions/602/applications/application_1775202169344_0001 ",
+					"impulseErrorCode": null,
+					"sparkSystemContextUrl": null,
+					"isStreamingQueryExists": "false",
+					"impulseClassification": null,
+					"impulseTsg": null,
+					"isSessionTimedOut": "false",
+					"driverLogUrl": " https://web.azuresynapse.net/sparkui/6e06e42d-6925-47c6-b9e7-9581c7ca302a/api/v1/workspaces/synw-cta-0001-tst-cr/sparkpools/spazcta000101/sessions/602/applications/application_1775202169344_0001/driverlog/stderr ",
+					"isErrorRetriable": "true"
+				},
+				"livyInfo": {
+					"jobCreationRequest": {
+						"jars": [],
+						"pyFiles": [],
+						"files": [],
+						"archives": [],
+						"driverMemory": "224g",
+						"driverCores": 32,
+						"executorMemory": "224g",
+						"executorCores": 32,
+						"numExecutors": 2,
+						"name": "ADP_Datahub_Test_Int_spazcta000101_1775202038",
+						"conf": {
+							"spark.dynamicAllocation.enabled": "false",
+							"spark.dynamicAllocation.minExecutors": "2",
+							"spark.dynamicAllocation.maxExecutors": "2",
+							"spark.autotune.trackingId": "ee44dcc6-9d83-4b65-a5dc-4414fbb66bf1",
+							"spark.synapse.context.pipelinejobid": "44058c83-be5d-48e3-ba56-0dac354a1776",
+							"spark.synapse.context.activityrunid": "7e428396-bbdf-4cf5-b03c-23d2f4a688f9",
+							"spark.synapse.context.notebookname": "ADP_Datahub_Test_Int",
+							"spark.synapse.context.activityname": "Notebook1",
+							"spark.livy.synapse.skipSplitCodeExecution.enabled": "true",
+							"livy.rsc.synapse.statement-output-for-error.enabled": "true",
+							"spark.synapse.nbs.runid": "7e428396-bbdf-4cf5-b03c-23d2f4a688f9",
+							"spark.synapse.nbs.kernelid": "",
+							"spark.livy.synapse.ipythonInterpreter.enabled": "true",
+							"livy.rsc.synapse.ipython-interpreter.options.ZMQInteractiveShell.display_page": "True"
+						}
+					},
+					"startingAt": "2026-04-03T07:44:56.4532288Z",
+					"idleAt": "2026-04-03T07:46:01.6892118Z",
+					"busyAt": "2026-04-03T07:46:16.7670699Z",
+					"currentState": "killed"
+				},
+				"schedulerInfo": {
+					"submittedAt": "2026-04-03T07:40:38.3443155Z",
+					"queuedAt": "2026-04-03T07:40:39.1122329Z",
+					"scheduledAt": "2026-04-03T07:40:49.4009994Z",
+					"endedAt": "2026-04-03T07:46:38.1052216Z",
+					"cancellationRequestedAt": "2026-04-03T07:46:36.8295394Z",
+					"currentState": "Ended"
+				},
+				"pluginInfo": {
+					"preparationStartedAt": "2026-04-03T07:40:54.4158928Z",
+					"resourceAcquisitionStartedAt": "2026-04-03T07:40:59.4302505Z",
+					"submissionStartedAt": "2026-04-03T07:44:54.8745229Z",
+					"monitoringStartedAt": "2026-04-03T07:45:01.4660653Z",
+					"cleanupStartedAt": "2026-04-03T07:46:36.8340673Z",
+					"currentState": "ended"
+				},
+				"registeredSources": [
+					"default"
+				],
+				"tags": {},
+				"systemStorageAccountType": null,
+				"workspaceId": null,
+				"artifactId": "Livy",
+				"jobType": "SparkSession",
+				"isHighConcurrency": false,
+				"cancellationReason": null,
+				"computeName": "spazcta000101"
+			},
+			"result": {
+				"runId": "7e428396-bbdf-4cf5-b03c-23d2f4a688f9",
+				"runStatus": "Succeeded",
+				"message": "Notebook execution is in Succeeded state, runId: 7e428396-bbdf-4cf5-b03c-23d2f4a688f9",
+				"sparkPool": "spazcta000101",
+				"notebookSnapshotUrl": " https://synw-cta-0001-tst-cr.dev.azuresynapse.net/runnotebookapi/versions/2022-03-01-preview/pipelinerun/7e428396-bbdf-4cf5-b03c-23d2f4a688f9/snapshot ",
+				"notebookSnapshotStudioUrl": " https://web.azuresynapse.net/monitoring/pipelineruns/44058c83-be5d-48e3-ba56-0dac354a1776?workspace=/subscriptions/3d26fee0-cbdd-47ac-91c3-cc6925792ed9/resourceGroups/rg-cta-0001-tst-cr/providers/Microsoft.Synapse/workspaces/synw-cta-0001-tst-cr&snapshotId=7e428396-bbdf-4cf5-b03c-23d2f4a688f9 ",
+				"exitValue": null,
+				"sessionId": "602",
+				"lastCheckedOn": "2026-04-03T07:46:38.3866667Z"
+			}
+		},
+		"Error": null,
+		"ExecutionDetails": {}
+	},
+	"effectiveIntegrationRuntime": "AutoResolveIntegrationRuntime (West Europe)",
+	"executionDuration": 364,
+	"durationInQueue": {
+		"integrationRuntimeQueue": 10
+	},
+	"billingReference": {
+		"activityType": "ExternalActivity",
+		"billableDuration": [
+			{
+				"meterType": "AzureIR",
+				"duration": 0.11666666666666667,
+				"unit": "Hours"
+			}
+		]
+	}
+} 
