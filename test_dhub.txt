@@ -1,48 +1,51 @@
-Perfect — now you are in **final stage**. I’ll give you **exact step-by-step (simple + copy paste)** to send data through pipeline → notebook → DataHub.
+Got it — here is the **clean, exact step-by-step (no confusion)** to make everything work 👇
 
 ---
 
 # 🎯 GOAL
 
-Send JSON data to DataHub using:
+Send data to DataHub using:
 
 ```text
-Pipeline → Web Activity (Token) → Notebook → DataHub API
+Pipeline → Get Token → Pass Token → Notebook → Upload Data
 ```
 
 ---
 
-# ✅ STEP 1 — Configure Web Activity (Token)
+# ✅ STEP 1 — Fix Web Activity (Token)
 
-Go to **Pipeline → GetApigeeToken (Web Activity)**
+Go to:
 
-### Settings:
+👉 **Pipeline → GetApigeeToken (Web Activity)**
 
-* **URL** → (already configured by DevOps)
-* **Method** → `POST`
-* **Body**:
+### Check these:
 
-```json
+* Method = **POST**
+* Headers:
+
+```text
+Content-Type : application/x-www-form-urlencoded
+```
+
+* Body:
+
+```text
 grant_type=client_credentials&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET
 ```
 
-* **Headers**:
-
-```json
-Content-Type: application/x-www-form-urlencoded
-```
-
 ---
 
-## ✅ Test it
+## ▶️ Run Debug once
 
-Click **Debug**
+👉 Go to **Output tab**
 
-👉 Output should contain:
+You should see:
 
 ```json
 {
-  "access_token": "eyJhbGciOi..."
+  "body": {
+    "access_token": "eyJhbGciOi..."
+  }
 }
 ```
 
@@ -50,37 +53,46 @@ Click **Debug**
 
 # ✅ STEP 2 — Pass token to Notebook
 
-Click **Notebook activity (Notebook1)**
+Go to:
 
-Go to **Settings → Base parameters**
+👉 **Notebook activity → Settings → Base parameters**
 
-Add:
+### ❗ Delete old one (`bearer_token`)
 
-| Name         | Value                                           |
-| ------------ | ----------------------------------------------- |
-| access_token | @activity('GetApigeeToken').output.access_token |
+### ➕ Add NEW:
+
+| Name         | Value                                                |
+| ------------ | ---------------------------------------------------- |
+| access_token | @activity('GetApigeeToken').output.body.access_token |
 
 ---
 
 # ✅ STEP 3 — Read token in Notebook
 
-Open your notebook → add this **first cell**
+Open your notebook → add this **FIRST CELL**
 
 ```python
 from notebookutils import mssparkutils
 
 print("Reading token...")
 
-token = mssparkutils.env.getJobParameter("access_token")
+token = mssparkutils.notebook.getParameter("access_token")
 
-print("Token received")
+print("Token received:", token[:20])
 ```
 
 ---
 
-## ⚠️ Quick check
+## ▶️ Test
 
-If token prints `None` → parameter mapping issue
+Run pipeline
+
+Expected:
+
+```text
+Reading token...
+Token received: eyJhbGciOi...
+```
 
 ---
 
@@ -126,7 +138,7 @@ files = {
     "file": ("test.json", json.dumps(data), "application/json")
 }
 
-print("Sending data to DataHub...")
+print("Sending data...")
 
 response = requests.post(
     url,
@@ -141,17 +153,13 @@ print("Response:", response.text)
 
 ---
 
-# ✅ STEP 6 — Run pipeline
+# ✅ STEP 6 — Run Pipeline
 
-Go to:
-
-👉 Pipeline → Click **Debug**
+👉 Click **Debug**
 
 ---
 
-# ✅ FINAL RESULT
-
-If everything correct:
+# ✅ FINAL SUCCESS
 
 ```text
 Status: 200
@@ -159,56 +167,52 @@ Status: 200
 
 ---
 
-# 🚨 Troubleshooting (quick)
+# 🚨 If something fails
 
-### ❌ 401
+### ❌ Token is None
 
-→ Token not passed correctly
-→ Check Step 2
+→ Wrong parameter mapping → check Step 2
 
 ---
 
-### ❌ None token
+### ❌ 401
 
-→ Wrong parameter name
-→ Must be:
-
-```text
-access_token
-```
+→ Token not passed properly
 
 ---
 
 ### ❌ 403
 
-→ Permission issue (team side)
+→ Access issue (team side)
 
 ---
 
-# 🧠 FULL FLOW (REMEMBER THIS)
+# 🧠 FINAL FLOW (REMEMBER)
 
 ```text
 Web Activity → gets token
+        ↓
+Pipeline → passes token
         ↓
 Notebook → reads token
         ↓
 Notebook → sends file
         ↓
-DataHub stores file ✅
+DataHub success ✅
 ```
 
 ---
 
-# 👍 You are basically done
+# 👍 You’re basically done
 
-This is **production-level integration** now.
+This is **real production setup**.
 
 ---
 
-If you want next level:
+If you want next:
 
-* Send **real-time streaming data**
-* Send **files from ADLS**
-* Automate with **trigger**
+👉 Send real-time data
+👉 Read from ADLS and push
+👉 Schedule pipeline
 
 I can guide that too 👍
