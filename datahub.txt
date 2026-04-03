@@ -1,139 +1,210 @@
-{
-	"status": {
-		"Status": "Succeeded",
-		"ExecutionStatusCode": null,
-		"ExecutionStateMappings": null,
-		"Output": {
-			"status": {
-				"id": "605",
-				"poolId": null,
-				"sessionAcquiredFromPool": null,
-				"clusterAcquiredFromPool": null,
-				"name": "ADP_Datahub_Test_Int_spazcta000101_1775212636",
-				"sparkPoolName": "spazcta000101",
-				"workspaceName": "synw-cta-0001-tst-cr",
-				"appId": "application_1775212769494_0001",
-				"submitterId": "2864980c-2195-47d6-bc42-d8b4ff8e3e11",
-				"errorInfo": [],
-				"owner": null,
-				"proxyUser": null,
-				"kind": "spark",
-				"isNewLivySession": false,
-				"log": [
-					"\t queue: default",
-					"\t start time: 1775212915336",
-					"\t final status: UNDEFINED",
-					"\t tracking URL: http://vm-f5e23338:8088/proxy/application_1775212769494_0001/",
-					"\t user: trusted-service-user",
-					"26/04/03 10:41:55 INFO ShutdownHookManager: Shutdown hook called",
-					"26/04/03 10:41:55 INFO ShutdownHookManager: Deleting directory /mnt/tmp/spark-079a57fa-201a-4de5-8d1c-8ef0a48ee2b5",
-					"26/04/03 10:41:55 INFO ShutdownHookManager: Deleting directory /mnt/tmp/spark-8d94a9fb-e6d7-43c6-8ce4-54b6711d05bc",
-					"\nstderr: ",
-					"\nYARN Diagnostics: "
-				],
-				"state": "killed",
-				"result": "cancelled",
-				"appInfo": {
-					"sparkUiUrl": "https://web.azuresynapse.net/sparkui/6e06e42d-6925-47c6-b9e7-9581c7ca302a/workspaces/synw-cta-0001-tst-cr/sparkpools/spazcta000101/sessions/605/applications/application_1775212769494_0001",
-					"impulseErrorCode": null,
-					"sparkSystemContextUrl": null,
-					"isStreamingQueryExists": "false",
-					"impulseClassification": null,
-					"impulseTsg": null,
-					"isSessionTimedOut": "false",
-					"driverLogUrl": "https://web.azuresynapse.net/sparkui/6e06e42d-6925-47c6-b9e7-9581c7ca302a/api/v1/workspaces/synw-cta-0001-tst-cr/sparkpools/spazcta000101/sessions/605/applications/application_1775212769494_0001/driverlog/stderr",
-					"isErrorRetriable": "true"
-				},
-				"livyInfo": {
-					"jobCreationRequest": {
-						"jars": [],
-						"pyFiles": [],
-						"files": [],
-						"archives": [],
-						"driverMemory": "224g",
-						"driverCores": 32,
-						"executorMemory": "224g",
-						"executorCores": 32,
-						"numExecutors": 2,
-						"name": "ADP_Datahub_Test_Int_spazcta000101_1775212636",
-						"conf": {
-							"spark.dynamicAllocation.enabled": "false",
-							"spark.dynamicAllocation.minExecutors": "2",
-							"spark.dynamicAllocation.maxExecutors": "2",
-							"spark.autotune.trackingId": "ee44dcc6-9d83-4b65-a5dc-4414fbb66bf1",
-							"spark.synapse.context.pipelinejobid": "7de38f3c-0046-4a58-8a9a-7ea5cbf83c02",
-							"spark.synapse.context.activityrunid": "f9429bed-465c-424e-86a7-206a86303a37",
-							"spark.synapse.context.notebookname": "ADP_Datahub_Test_Int",
-							"spark.synapse.context.activityname": "Notebook1",
-							"spark.livy.synapse.skipSplitCodeExecution.enabled": "true",
-							"livy.rsc.synapse.statement-output-for-error.enabled": "true",
-							"spark.synapse.nbs.runid": "f9429bed-465c-424e-86a7-206a86303a37",
-							"spark.synapse.nbs.kernelid": "",
-							"spark.livy.synapse.ipythonInterpreter.enabled": "true",
-							"livy.rsc.synapse.ipython-interpreter.options.ZMQInteractiveShell.display_page": "True"
-						}
-					},
-					"startingAt": "2026-04-03T10:41:44.1042305Z",
-					"idleAt": "2026-04-03T10:42:29.3570638Z",
-					"busyAt": "2026-04-03T10:42:54.4368777Z",
-					"currentState": "killed"
-				},
-				"schedulerInfo": {
-					"submittedAt": "2026-04-03T10:37:16.7524635Z",
-					"queuedAt": "2026-04-03T10:37:16.7985482Z",
-					"scheduledAt": "2026-04-03T10:37:27.1252488Z",
-					"endedAt": "2026-04-03T10:43:05.8533371Z",
-					"cancellationRequestedAt": "2026-04-03T10:43:04.4711308Z",
-					"currentState": "Ended"
-				},
-				"pluginInfo": {
-					"preparationStartedAt": "2026-04-03T10:37:32.1234194Z",
-					"resourceAcquisitionStartedAt": "2026-04-03T10:37:37.1218134Z",
-					"submissionStartedAt": "2026-04-03T10:41:42.4398633Z",
-					"monitoringStartedAt": "2026-04-03T10:41:49.1097247Z",
-					"cleanupStartedAt": "2026-04-03T10:43:04.4739504Z",
-					"currentState": "ended"
-				},
-				"registeredSources": [
-					"default"
-				],
-				"tags": {},
-				"systemStorageAccountType": null,
-				"workspaceId": null,
-				"artifactId": "Livy",
-				"jobType": "SparkSession",
-				"isHighConcurrency": false,
-				"cancellationReason": null,
-				"computeName": "spazcta000101"
-			},
-			"result": {
-				"runId": "f9429bed-465c-424e-86a7-206a86303a37",
-				"runStatus": "Succeeded",
-				"message": "Notebook execution is in Succeeded state, runId: f9429bed-465c-424e-86a7-206a86303a37",
-				"sparkPool": "spazcta000101",
-				"notebookSnapshotUrl": "https://synw-cta-0001-tst-cr.dev.azuresynapse.net/runnotebookapi/versions/2022-03-01-preview/pipelinerun/f9429bed-465c-424e-86a7-206a86303a37/snapshot",
-				"notebookSnapshotStudioUrl": "https://web.azuresynapse.net/monitoring/pipelineruns/7de38f3c-0046-4a58-8a9a-7ea5cbf83c02?workspace=/subscriptions/3d26fee0-cbdd-47ac-91c3-cc6925792ed9/resourceGroups/rg-cta-0001-tst-cr/providers/Microsoft.Synapse/workspaces/synw-cta-0001-tst-cr&snapshotId=f9429bed-465c-424e-86a7-206a86303a37",
-				"exitValue": null,
-				"sessionId": "605",
-				"lastCheckedOn": "2026-04-03T10:43:16.7466667Z"
-			}
-		},
-		"Error": null,
-		"ExecutionDetails": {}
-	},
-	"effectiveIntegrationRuntime": "AutoResolveIntegrationRuntime (West Europe)",
-	"executionDuration": 365,
-	"durationInQueue": {
-		"integrationRuntimeQueue": 0
-	},
-	"billingReference": {
-		"activityType": "ExternalActivity",
-		"billableDuration": [
-			{
-				"meterType": "AzureIR",
-				"duration": 0.11666666666666667,
-				"unit": "Hours"
-			}
-		]
-	}
-}
+=== DataHub Upload Started ===
+Token length: 702
+Token preview: eyJraWQiOiIxIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ.eyJzdWIiOiJESFVCX0lOVF9URU5BTlQiLCJhdWQiOiJhbGxpY...
+Data prepared: {"eventTime": "2026-04-03T11:30:17Z", "policyId": "POL123", "status": "ACTIVE", "amount": 1000}
+Sending multipart upload to DataHub...
+---------------------------------------------------------------------------
+SSLCertVerificationError                  Traceback (most recent call last)
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/urllib3/connectionpool.py:464, in HTTPConnectionPool._make_request(self, conn, method, url, body, headers, retries, timeout, chunked, response_conn, preload_content, decode_content, enforce_content_length)
+    463 try:
+--> 464     self._validate_conn(conn)
+    465 except (SocketTimeout, BaseSSLError) as e:
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/urllib3/connectionpool.py:1093, in HTTPSConnectionPool._validate_conn(self, conn)
+   1092 if conn.is_closed:
+-> 1093     conn.connect()
+   1095 # TODO revise this, see https://github.com/urllib3/urllib3/issues/2791
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/urllib3/connection.py:741, in HTTPSConnection.connect(self)
+    739 server_hostname_rm_dot = server_hostname.rstrip(".")
+--> 741 sock_and_verified = _ssl_wrap_socket_and_match_hostname(
+    742     sock=sock,
+    743     cert_reqs=self.cert_reqs,
+    744     ssl_version=self.ssl_version,
+    745     ssl_minimum_version=self.ssl_minimum_version,
+    746     ssl_maximum_version=self.ssl_maximum_version,
+    747     ca_certs=self.ca_certs,
+    748     ca_cert_dir=self.ca_cert_dir,
+    749     ca_cert_data=self.ca_cert_data,
+    750     cert_file=self.cert_file,
+    751     key_file=self.key_file,
+    752     key_password=self.key_password,
+    753     server_hostname=server_hostname_rm_dot,
+    754     ssl_context=self.ssl_context,
+    755     tls_in_tls=tls_in_tls,
+    756     assert_hostname=self.assert_hostname,
+    757     assert_fingerprint=self.assert_fingerprint,
+    758 )
+    759 self.sock = sock_and_verified.socket
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/urllib3/connection.py:920, in _ssl_wrap_socket_and_match_hostname(sock, cert_reqs, ssl_version, ssl_minimum_version, ssl_maximum_version, cert_file, key_file, key_password, ca_certs, ca_cert_dir, ca_cert_data, assert_hostname, assert_fingerprint, server_hostname, ssl_context, tls_in_tls)
+    918         server_hostname = normalized
+--> 920 ssl_sock = ssl_wrap_socket(
+    921     sock=sock,
+    922     keyfile=key_file,
+    923     certfile=cert_file,
+    924     key_password=key_password,
+    925     ca_certs=ca_certs,
+    926     ca_cert_dir=ca_cert_dir,
+    927     ca_cert_data=ca_cert_data,
+    928     server_hostname=server_hostname,
+    929     ssl_context=context,
+    930     tls_in_tls=tls_in_tls,
+    931 )
+    933 try:
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/urllib3/util/ssl_.py:460, in ssl_wrap_socket(sock, keyfile, certfile, cert_reqs, ca_certs, server_hostname, ssl_version, ciphers, ssl_context, ca_cert_dir, key_password, ca_cert_data, tls_in_tls)
+    458 context.set_alpn_protocols(ALPN_PROTOCOLS)
+--> 460 ssl_sock = _ssl_wrap_socket_impl(sock, context, tls_in_tls, server_hostname)
+    461 return ssl_sock
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/urllib3/util/ssl_.py:504, in _ssl_wrap_socket_impl(sock, ssl_context, tls_in_tls, server_hostname)
+    502     return SSLTransport(sock, ssl_context, server_hostname)
+--> 504 return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/ssl.py:517, in SSLContext.wrap_socket(self, sock, server_side, do_handshake_on_connect, suppress_ragged_eofs, server_hostname, session)
+    511 def wrap_socket(self, sock, server_side=False,
+    512                 do_handshake_on_connect=True,
+    513                 suppress_ragged_eofs=True,
+    514                 server_hostname=None, session=None):
+    515     # SSLSocket class handles server_hostname encoding before it calls
+    516     # ctx._wrap_socket()
+--> 517     return self.sslsocket_class._create(
+    518         sock=sock,
+    519         server_side=server_side,
+    520         do_handshake_on_connect=do_handshake_on_connect,
+    521         suppress_ragged_eofs=suppress_ragged_eofs,
+    522         server_hostname=server_hostname,
+    523         context=self,
+    524         session=session
+    525     )
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/ssl.py:1104, in SSLSocket._create(cls, sock, server_side, do_handshake_on_connect, suppress_ragged_eofs, server_hostname, context, session)
+   1103                 raise ValueError("do_handshake_on_connect should not be specified for non-blocking sockets")
+-> 1104             self.do_handshake()
+   1105 except:
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/ssl.py:1382, in SSLSocket.do_handshake(self, block)
+   1381         self.settimeout(None)
+-> 1382     self._sslobj.do_handshake()
+   1383 finally:
+
+SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1006)
+
+During handling of the above exception, another exception occurred:
+
+SSLError                                  Traceback (most recent call last)
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/urllib3/connectionpool.py:787, in HTTPConnectionPool.urlopen(self, method, url, body, headers, retries, redirect, assert_same_host, timeout, pool_timeout, release_conn, chunked, body_pos, preload_content, decode_content, **response_kw)
+    786 # Make the request on the HTTPConnection object
+--> 787 response = self._make_request(
+    788     conn,
+    789     method,
+    790     url,
+    791     timeout=timeout_obj,
+    792     body=body,
+    793     headers=headers,
+    794     chunked=chunked,
+    795     retries=retries,
+    796     response_conn=response_conn,
+    797     preload_content=preload_content,
+    798     decode_content=decode_content,
+    799     **response_kw,
+    800 )
+    802 # Everything went great!
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/urllib3/connectionpool.py:488, in HTTPConnectionPool._make_request(self, conn, method, url, body, headers, retries, timeout, chunked, response_conn, preload_content, decode_content, enforce_content_length)
+    487         new_e = _wrap_proxy_error(new_e, conn.proxy.scheme)
+--> 488     raise new_e
+    490 # conn.request() calls http.client.*.request, not the method in
+    491 # urllib3.request. It also calls makefile (recv) on the socket.
+
+SSLError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1006)
+
+The above exception was the direct cause of the following exception:
+
+MaxRetryError                             Traceback (most recent call last)
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/requests/adapters.py:667, in HTTPAdapter.send(self, request, stream, timeout, verify, cert, proxies)
+    666 try:
+--> 667     resp = conn.urlopen(
+    668         method=request.method,
+    669         url=url,
+    670         body=request.body,
+    671         headers=request.headers,
+    672         redirect=False,
+    673         assert_same_host=False,
+    674         preload_content=False,
+    675         decode_content=False,
+    676         retries=self.max_retries,
+    677         timeout=timeout,
+    678         chunked=chunked,
+    679     )
+    681 except (ProtocolError, OSError) as err:
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/urllib3/connectionpool.py:841, in HTTPConnectionPool.urlopen(self, method, url, body, headers, retries, redirect, assert_same_host, timeout, pool_timeout, release_conn, chunked, body_pos, preload_content, decode_content, **response_kw)
+    839     new_e = ProtocolError("Connection aborted.", new_e)
+--> 841 retries = retries.increment(
+    842     method, url, error=new_e, _pool=self, _stacktrace=sys.exc_info()[2]
+    843 )
+    844 retries.sleep()
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/urllib3/util/retry.py:519, in Retry.increment(self, method, url, response, error, _pool, _stacktrace)
+    518     reason = error or ResponseError(cause)
+--> 519     raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    521 log.debug("Incremented Retry for (url='%s'): %r", url, new_retry)
+
+MaxRetryError: HTTPSConnectionPool(host='dhub-int.cta.allianz', port=443): Max retries exceeded with url: /api/v1/file/upload (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1006)')))
+
+During handling of the above exception, another exception occurred:
+
+SSLError                                  Traceback (most recent call last)
+Cell In[11], line 41
+     35 files = {
+     36     "file": ("test.json", json_content, "application/json")
+     37 }
+     39 print("Sending multipart upload to DataHub...")
+---> 41 response = requests.post(url, headers=headers, files=files, timeout=120)
+     43 print("Status Code:", response.status_code)
+     44 print("Response Body:", response.text)
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/requests/api.py:115, in post(url, data, json, **kwargs)
+    103 def post(url, data=None, json=None, **kwargs):
+    104     r"""Sends a POST request.
+    105 
+    106     :param url: URL for the new :class:`Request` object.
+   (...)
+    112     :rtype: requests.Response
+    113     """
+--> 115     return request("post", url, data=data, json=json, **kwargs)
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/requests/api.py:59, in request(method, url, **kwargs)
+     55 # By using the 'with' statement we are sure the session is closed, thus we
+     56 # avoid leaving sockets open which can trigger a ResourceWarning in some
+     57 # cases, and look like a memory leak in others.
+     58 with sessions.Session() as session:
+---> 59     return session.request(method=method, url=url, **kwargs)
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/requests/sessions.py:589, in Session.request(self, method, url, params, data, headers, cookies, files, auth, timeout, allow_redirects, proxies, hooks, stream, verify, cert, json)
+    584 send_kwargs = {
+    585     "timeout": timeout,
+    586     "allow_redirects": allow_redirects,
+    587 }
+    588 send_kwargs.update(settings)
+--> 589 resp = self.send(prep, **send_kwargs)
+    591 return resp
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/requests/sessions.py:703, in Session.send(self, request, **kwargs)
+    700 start = preferred_clock()
+    702 # Send the request
+--> 703 r = adapter.send(request, **kwargs)
+    705 # Total elapsed time of the request (approximately)
+    706 elapsed = preferred_clock() - start
+
+File ~/cluster-env/synapse-clonedenv/lib/python3.11/site-packages/requests/adapters.py:698, in HTTPAdapter.send(self, request, stream, timeout, verify, cert, proxies)
+    694         raise ProxyError(e, request=request)
+    696     if isinstance(e.reason, _SSLError):
+    697         # This branch is for urllib3 v1.22 and later.
+--> 698         raise SSLError(e, request=request)
+    700     raise ConnectionError(e, request=request)
+    702 except ClosedPoolError as e:
+
+SSLError: HTTPSConnectionPool(host='dhub-int.cta.allianz', port=443): Max retries exceeded with url: /api/v1/file/upload (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1006)')))
